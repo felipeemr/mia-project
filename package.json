@@ -1,0 +1,17 @@
+{
+  "name": "meraki-plataforma",
+  "version": "2.0.0",
+  "description": "Meraki Artes Digitais — Plataforma Web com IA (Fase 2)",
+  "main": "index.html",
+  "scripts": {
+    "frontend": "npx -y http-server . -p 3000 -o --cors",
+    "backend":  "cd server && npm run dev",
+    "dev":      "npx -y concurrently \"npm run frontend\" \"npm run backend\" --names \"frontend,backend\" --prefix-colors \"cyan,magenta\"",
+    "install:server": "cd server && npm install",
+    "setup":    "npm run install:server",
+    "start":    "cd server && npm start"
+  },
+  "keywords": [],
+  "author": "Antigravity",
+  "license": "ISC"
+}

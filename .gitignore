@@ -1,0 +1,25 @@
+# Dependências Node
+node_modules/
+server/node_modules/
+
+# Variáveis de ambiente (NUNCA commitar)
+.env
+server/.env
+
+# Arquivos de build e cache
+.cache/
+dist/
+*.log
+npm-debug.log*
+
+# Sistema operacional
+.DS_Store
+Thumbs.db
+
+# IDE
+.vscode/
+.idea/
+
+# Arquivos temporários gerados
+server/tmp/
+server/uploads/
