@@ -77,6 +77,7 @@ async function generateWithReplicate(prompt, options = {}) {
         width:       options.width  || 1024,
         height:      options.height || 1024,
         num_outputs: 1,
+        disable_safety_checker: true,
         ...options.replicateInput,
     };
 
@@ -88,11 +89,21 @@ async function generateWithReplicate(prompt, options = {}) {
     }
 
     console.log(`[AI/Replicate] Gerando com modelo ${model}...`);
-    const output = await replicate.run(model, { input });
-
-    // Replicate retorna array de URLs
-    const urls = Array.isArray(output) ? output : [output];
-    return urls[0];
+    try {
+        const output = await replicate.run(model, { input });
+        const urls = Array.isArray(output) ? output : [output];
+        return urls[0];
+    } catch (err) {
+        if (err.message.includes('NSFW') && options.referenceImageBase64) {
+            console.warn(`[AI/Replicate] NSFW detectado. Tentando gerar sem a imagem de referência...`);
+            delete input.image;
+            delete input.prompt_strength;
+            const fallbackOutput = await replicate.run(model, { input });
+            const urls = Array.isArray(fallbackOutput) ? fallbackOutput : [fallbackOutput];
+            return urls[0];
+        }
+        throw err;
+    }
 }
 
 // ---------------------------------------------------------------------------
@@ -303,25 +314,45 @@ async function generateKitImages(projectData, childPhotos = [], inspirationRefs 
     
     console.log(`[AI/Replicate] Gerando 2/5: Mascote...`);
     const mascoteRef = childB64 || refB64; // Usa a foto da criança para cartonizar, se houver
-    const mascoteUrl    = await generateImage(prompts.mascote,    { width: 1024, height: 1024, referenceImageBase64: mascoteRef });
+    let mascoteUrl = null;
+    try {
+        mascoteUrl = await generateImage(prompts.mascote, { width: 1024, height: 1024, referenceImageBase64: mascoteRef });
+    } catch (e) {
+        console.warn(`[AI/Replicate] Falha no Mascote:`, e.message);
+    }
     
     console.log(`[AI/Replicate] Pausa de 12s para esfriar o Rate Limit...`);
     await delay(12000);
 
     console.log(`[AI/Replicate] Gerando 3/5: Elementos...`);
-    const elementosUrl  = await generateImage(prompts.elementos,  { width: 1024, height: 1024, referenceImageBase64: refB64 });
+    let elementosUrl = null;
+    try {
+        elementosUrl = await generateImage(prompts.elementos, { width: 1024, height: 1024, referenceImageBase64: refB64 });
+    } catch (e) {
+        console.warn(`[AI/Replicate] Falha nos Elementos:`, e.message);
+    }
     
     console.log(`[AI/Replicate] Pausa de 12s para esfriar o Rate Limit...`);
     await delay(12000);
 
     console.log(`[AI/Replicate] Gerando 4/5: Fundo...`);
-    const fundoUrl      = await generateImage(prompts.fundo,      { width: 1024, height: 1024, referenceImageBase64: refB64 });
+    let fundoUrl = null;
+    try {
+        fundoUrl = await generateImage(prompts.fundo, { width: 1024, height: 1024, referenceImageBase64: refB64 });
+    } catch (e) {
+        console.warn(`[AI/Replicate] Falha no Fundo:`, e.message);
+    }
     
     console.log(`[AI/Replicate] Pausa de 12s para esfriar o Rate Limit...`);
     await delay(12000);
 
     console.log(`[AI/Replicate] Gerando 5/5: Papel Digital...`);
-    const papelUrl      = await generateImage(prompts.papel,      { width: 1024, height: 1024, referenceImageBase64: refB64 });
+    let papelUrl = null;
+    try {
+        papelUrl = await generateImage(prompts.papel, { width: 1024, height: 1024, referenceImageBase64: refB64 });
+    } catch (e) {
+        console.warn(`[AI/Replicate] Falha no Papel Digital:`, e.message);
+    }
 
     // --- FASE EXTRA: LEMBRETE INTEGRADO VIA GPT-IMAGE ---
     console.log(`[AI/GPT-Image] Gerando Lembrete Nativo (Bônus)...`);
