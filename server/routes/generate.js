@@ -227,19 +227,22 @@ router.post('/', optionalAuth, upload.fields([
     console.log(`[Generate] ✅ Concluído para "${projectData.name}"`);
 
     // --- 7. Retornar resposta ao frontend ---
+    const timestamp = Date.now();
+    const applyCacheBuster = (url) => (url && url.startsWith('http') ? `${url}?t=${timestamp}` : url);
+
     res.json({
         projectId,
         status:     'preview',
         assetsUrls: {
-            // Imagens geradas por IA
-            background:   assetsUrls.background   || null,
-            mascote:      assetsUrls.mascote       || null,
-            elementos:    assetsUrls.elementos     || null,
-            fundo:        assetsUrls.fundo         || null,
-            papel:        assetsUrls.papel         || null,
-            // Convite e lembrete renderizados em alta resolução (com marca d'água)
-            convitePreview:  assetsUrls.convite_preview  || null,
-            lembretePreview: assetsUrls.lembrete_preview || null,
+            // Imagens geradas por IA (com cache-buster para forçar a atualização no navegador)
+            background:   applyCacheBuster(assetsUrls.background),
+            mascote:      applyCacheBuster(assetsUrls.mascote),
+            elementos:    applyCacheBuster(assetsUrls.elementos),
+            fundo:        applyCacheBuster(assetsUrls.fundo),
+            papel:        applyCacheBuster(assetsUrls.papel),
+            // Convite e lembrete renderizados em alta resolução
+            convitePreview:  applyCacheBuster(assetsUrls.convite_preview),
+            lembretePreview: applyCacheBuster(assetsUrls.lembrete_preview),
             // DNA Visual extraído (tipografia, ícones)
             _dna:            aiDna,
         },

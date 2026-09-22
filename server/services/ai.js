@@ -391,6 +391,7 @@ async function generateKitImages(projectData, childPhotos = [], inspirationRefs 
     console.log(`[AI/GPT-Image] Gerando Lembrete Nativo (Bônus)...`);
     let lembreteUrl = null;
     try {
+        const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
         let lembretePrompt = `Create a spectacular, professional 3D animated movie poster acting as a party reminder. Theme: ${activeThemeLabel}. The art style MUST BE highly stylized 3D cartoon animation (like Pixar or Disney, absolutely NOT photorealistic). In the center of the scene, there is a cute 3D cartoon character seamlessly integrated into the environment. The character is described as: ${childFeatures || 'a cute stylized kid matching the theme'}. The color palette is vibrant: ${JSON.stringify(inspirationDna?.palette || 'vibrant colors')}. IMPORTANT: The image MUST contain perfectly rendered massive 3D typography integrated into the scene that explicitly reads EXACTLY: "FALTAM 5 DIAS", and below it smaller typography reading: "Para a festa do ${name.toUpperCase()}!". The typography must match the theme perfectly.`;
         
         console.log(`[AI/GPT-Image] Sanitizando prompt do lembrete contra filtros de copyright...`);
