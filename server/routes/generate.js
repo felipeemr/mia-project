@@ -190,16 +190,12 @@ router.post('/', optionalAuth, upload.fields([
     let conviteThumb = null;
 
     try {
-        // FASE 7: Não renderizamos o convite por cima, pois o DALL-E 3 já desenha o pôster perfeito.
-        // Renderizamos apenas o lembrete (que precisa da contagem regressiva).
-        const lembretePng = await renderLembrete(projectData, bgBuffer, true, aiDna);
-
         // O thumbnail do convite será feito usando a imagem pura do DALL-E 3 (bgBuffer)
         conviteThumb = await createThumbnail(bgBuffer, 600);
 
         if (projectId) {
-            // O convitePreview no Supabase também será nulo (o sistema usará o background).
-            lembreteUrl = await uploadBuffer(lembretePng,  `projects/${projectId}/lembrete_preview.png`, 'image/png');
+            // Se a IA gerou um lembrete nativo, usamos ele como preview
+            lembreteUrl = assetsUrls.lembrete || null;
             await uploadBuffer(conviteThumb, `projects/${projectId}/convite_thumb.jpg`,    'image/jpeg');
         }
 

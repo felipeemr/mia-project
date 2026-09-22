@@ -302,32 +302,51 @@ async function generateKitImages(projectData, childPhotos = [], inspirationRefs 
     await delay(12000);
     
     console.log(`[AI/Replicate] Gerando 2/5: Mascote...`);
-    // Removemos refB64 para evitar travar a composição e atrapalhar elementos isolados.
-    const mascoteUrl    = await generateImage(prompts.mascote,    { width: 1024, height: 1024 });
+    const mascoteUrl    = await generateImage(prompts.mascote,    { width: 1024, height: 1024, referenceImageBase64: refB64 });
     
     console.log(`[AI/Replicate] Pausa de 12s para esfriar o Rate Limit...`);
     await delay(12000);
 
     console.log(`[AI/Replicate] Gerando 3/5: Elementos...`);
-    const elementosUrl  = await generateImage(prompts.elementos,  { width: 1024, height: 1024 });
+    const elementosUrl  = await generateImage(prompts.elementos,  { width: 1024, height: 1024, referenceImageBase64: refB64 });
     
     console.log(`[AI/Replicate] Pausa de 12s para esfriar o Rate Limit...`);
     await delay(12000);
 
     console.log(`[AI/Replicate] Gerando 4/5: Fundo...`);
-    const fundoUrl      = await generateImage(prompts.fundo,      { width: 1024, height: 1024 });
+    const fundoUrl      = await generateImage(prompts.fundo,      { width: 1024, height: 1024, referenceImageBase64: refB64 });
     
     console.log(`[AI/Replicate] Pausa de 12s para esfriar o Rate Limit...`);
     await delay(12000);
 
     console.log(`[AI/Replicate] Gerando 5/5: Papel Digital...`);
-    const papelUrl      = await generateImage(prompts.papel,      { width: 1024, height: 1024 });
+    const papelUrl      = await generateImage(prompts.papel,      { width: 1024, height: 1024, referenceImageBase64: refB64 });
+
+    // --- FASE EXTRA: LEMBRETE INTEGRADO VIA GPT-IMAGE ---
+    console.log(`[AI/GPT-Image] Gerando Lembrete Nativo (Bônus)...`);
+    let lembreteUrl = null;
+    try {
+        const lembretePrompt = `Create a spectacular, professional 3D animated movie poster acting as a party reminder. Theme: ${activeThemeLabel}. The art style MUST BE highly stylized 3D cartoon animation (like Pixar or Disney, absolutely NOT photorealistic). In the center of the scene, there is a cute 3D cartoon character seamlessly integrated into the environment. The character is described as: ${childFeatures || 'a cute stylized kid matching the theme'}. The color palette is vibrant: ${JSON.stringify(inspirationDna?.palette || 'vibrant colors')}. IMPORTANT: The image MUST contain perfectly rendered massive 3D typography integrated into the scene that explicitly reads EXACTLY: "FALTAM 5 DIAS", and below it smaller typography reading: "Para a festa do ${name.toUpperCase()}!". The typography must match the theme perfectly.`;
+        
+        const lembreteResponse = await openai.images.generate({
+            model: "chatgpt-image-latest",
+            prompt: lembretePrompt,
+            n: 1,
+            size: "1024x1536", 
+        });
+        const lembreteItem = lembreteResponse.data[0];
+        lembreteUrl = lembreteItem.url || (lembreteItem.b64_json ? `data:image/png;base64,${lembreteItem.b64_json}` : null) || (lembreteItem.b64 ? `data:image/png;base64,${lembreteItem.b64}` : null);
+        console.log(`[AI/GPT-Image] ✅ Lembrete gerado com sucesso!`);
+    } catch (e) {
+        console.warn(`[AI/GPT-Image] Falha ao gerar lembrete nativo:`, e.message);
+    }
 
     const elapsed = ((Date.now() - startTime) / 1000).toFixed(1);
     console.log(`[AI] ✅ ${Object.keys(prompts).length} imagens cenográficas geradas em ${elapsed}s`);
 
     return {
         background:   backgroundUrl,
+        lembrete:     lembreteUrl,
         mascote:      mascoteUrl,
         elementos:    elementosUrl,
         fundo:        fundoUrl,
