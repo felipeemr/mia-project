@@ -194,6 +194,7 @@ async function analyzeChildPhoto(photoBuffer) {
         });
         const desc = response.choices[0]?.message?.content?.trim();
         console.log('[AI/Vision] Características da criança:', desc);
+        if (desc && desc.toLowerCase().includes("sorry")) return null;
         return desc;
     } catch (e) {
         console.warn('[AI/Vision] Falha ao analisar foto da criança:', e.message);
@@ -316,7 +317,7 @@ async function generateKitImages(projectData, childPhotos = [], inspirationRefs 
     let backgroundUrl = null;
     try {
         const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
-        let dallePrompt = `Create a spectacular, professional 3D animated movie poster acting as a party invitation. Theme: ${activeThemeLabel}. The art style MUST BE highly stylized 3D cartoon animation (like Pixar or Disney, absolutely NOT photorealistic). In the center of the scene, there is a cute 3D cartoon character seamlessly integrated into the environment. The character is described as: ${childFeatures || 'a cute stylized kid matching the theme'}. Make sure the character looks like a 3D animated movie character. The character is interacting with the epic scenery (${JSON.stringify(inspirationDna?.scenery || 'highly detailed thematic landscape')}). The color palette is vibrant: ${JSON.stringify(inspirationDna?.palette || 'vibrant colors')}. IMPORTANT: The image MUST contain perfectly rendered massive 3D typography integrated into the scene (e.g. floating blocks, neon signs, or cinematic titles) that explicitly reads exactly: "${name.toUpperCase()}", and "${projectData.age ? projectData.age + ' ANOS' : ''}". Somewhere elegant in the poster, include the text: "Data: ${projectData.date || 'TBD'} às ${projectData.time ? projectData.time + 'h' : 'TBD'}". Also prominently include the location text: "${projectData.location || ''}". Finally, include the short phrase: "${projectData.phrase || ''}". The typography must match the theme perfectly.`;
+        let dallePrompt = `Create a spectacular, professional 3D animated movie poster acting as a party invitation. Theme: ${activeThemeLabel}. The art style MUST BE highly stylized 3D cartoon animation (like Pixar or Disney, absolutely NOT photorealistic). In the center of the scene, there is a cute 3D cartoon character seamlessly integrated into the environment. The character is described as: ${childFeatures || 'a cute stylized kid matching the theme'}. Make sure the character looks like a 3D animated movie character. The character is interacting with the epic scenery (${JSON.stringify(inspirationDna?.scenery || 'highly detailed thematic landscape')}). The color palette is vibrant: ${JSON.stringify(inspirationDna?.palette || 'vibrant colors')}. IMPORTANT: The image MUST contain perfectly rendered massive 3D typography integrated into the scene (e.g. floating blocks, neon signs, or cinematic titles) that explicitly reads exactly: "${name.toUpperCase()}", and "${projectData.age ? projectData.age + ' ANOS' : ''}". Leave the bottom third of the image clean, empty, and uncluttered (no text) to serve as a background for additional text later.`;
         
         console.log(`[AI/GPT-Image] Sanitizando prompt contra filtros de copyright...`);
         dallePrompt = await sanitizePromptForDalle(dallePrompt);
@@ -333,7 +334,7 @@ async function generateKitImages(projectData, childPhotos = [], inspirationRefs 
     } catch (e) {
         console.warn(`[AI/GPT-Image] Falha ao gerar pôster: ${e.message}. Acionando fallback para FLUX.1 no Replicate...`);
         // O Flux.1 é excelente em tipografia. Usamos uma narrativa rica como no Midjourney/ChatGPT.
-        const fluxPrompt = `A spectacular professional 3D animated movie poster acting as a party invitation. Theme: ${activeThemeLabel}. The art style is a highly detailed 3D render (Pixar/Disney or Unreal Engine 5 style). In the center of the scene stands a 3D character seamlessly integrated into the epic environment. The character's physical traits: ${childFeatures || 'a cute stylized kid matching the theme'}. The character is interacting with the scenery (${JSON.stringify(inspirationDna?.scenery || 'highly detailed thematic landscape')}). Color palette: ${JSON.stringify(inspirationDna?.palette || 'vibrant colors')}. The image MUST contain perfectly rendered massive 3D typography integrated into the scene (like cinematic titles or carved in the environment) that explicitly reads EXACTLY: "${name.toUpperCase()}", and "${projectData.age ? projectData.age + ' ANOS' : ''}". Also include the text: "Data: ${projectData.date || 'TBD'} às ${projectData.time ? projectData.time + 'h' : 'TBD'}". Below that, write the location text: "${projectData.location || ''}". Also include the inviting phrase: "${projectData.phrase || ''}". The typography perfectly matches the theme's aesthetic. Masterpiece, 8k resolution, highly detailed.`;
+        const fluxPrompt = `A spectacular professional 3D animated movie poster acting as a party invitation. Theme: ${activeThemeLabel}. The art style is a highly detailed 3D render (Pixar/Disney or Unreal Engine 5 style). In the center of the scene stands a 3D character seamlessly integrated into the epic environment. The character's physical traits: ${childFeatures || 'a cute stylized kid matching the theme'}. The character is interacting with the scenery (${JSON.stringify(inspirationDna?.scenery || 'highly detailed thematic landscape')}). Color palette: ${JSON.stringify(inspirationDna?.palette || 'vibrant colors')}. The image MUST contain perfectly rendered massive 3D typography integrated into the scene (like cinematic titles or carved in the environment) that explicitly reads EXACTLY: "${name.toUpperCase()}", and "${projectData.age ? projectData.age + ' ANOS' : ''}". Leave the bottom third of the image completely clean, empty, and textless. Masterpiece, 8k resolution, highly detailed.`;
         backgroundUrl = await generateWithReplicate(fluxPrompt, { 
             model: 'black-forest-labs/flux-schnell', 
             width: 1024, 
@@ -360,7 +361,7 @@ async function generateKitImages(projectData, childPhotos = [], inspirationRefs 
     console.log(`[AI/Replicate] Gerando 3/5: Elementos...`);
     let elementosUrl = null;
     try {
-        elementosUrl = await generateImage(prompts.elementos, { width: 1024, height: 1024, referenceImageBase64: refB64 });
+        elementosUrl = await generateImage(prompts.elementos, { width: 1024, height: 1024 });
     } catch (e) {
         console.warn(`[AI/Replicate] Falha nos Elementos:`, e.message);
     }
@@ -371,7 +372,7 @@ async function generateKitImages(projectData, childPhotos = [], inspirationRefs 
     console.log(`[AI/Replicate] Gerando 4/5: Fundo...`);
     let fundoUrl = null;
     try {
-        fundoUrl = await generateImage(prompts.fundo, { width: 1024, height: 1024, referenceImageBase64: refB64 });
+        fundoUrl = await generateImage(prompts.fundo, { width: 1024, height: 1024 });
     } catch (e) {
         console.warn(`[AI/Replicate] Falha no Fundo:`, e.message);
     }
@@ -382,7 +383,7 @@ async function generateKitImages(projectData, childPhotos = [], inspirationRefs 
     console.log(`[AI/Replicate] Gerando 5/5: Papel Digital...`);
     let papelUrl = null;
     try {
-        papelUrl = await generateImage(prompts.papel, { width: 1024, height: 1024, referenceImageBase64: refB64 });
+        papelUrl = await generateImage(prompts.papel, { width: 1024, height: 1024 });
     } catch (e) {
         console.warn(`[AI/Replicate] Falha no Papel Digital:`, e.message);
     }

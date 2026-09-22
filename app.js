@@ -667,9 +667,14 @@ function startLoadingProgressAnimation() {
 function populateResultScreen() {
     const p = appState.currentProject;
     
-    // 1. Invitation overlay texts (REMOVIDO PARA FASE 7 - Pôster DALL-E 3)
+    // 1. Invitation overlay texts
     const bgUrl = p.assetsUrls?.convitePreview || p.assetsUrls?.background || p.bgTemplate;
     document.getElementById('invite-bg-image').src = bgUrl;
+    
+    document.getElementById('invite-val-date').textContent = p.date;
+    document.getElementById('invite-val-time').textContent = p.time;
+    document.getElementById('invite-val-location').textContent = p.location;
+    document.getElementById('invite-val-phrase').textContent = p.phrase;
     
     // 2. RSVP/Reminder overlay texts
     document.getElementById('reminder-val-name').textContent = p.name;
