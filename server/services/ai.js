@@ -275,7 +275,7 @@ async function generateKitImages(projectData, childPhotos = [], inspirationRefs 
     let backgroundUrl = null;
     try {
         const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
-        const dallePrompt = `Create a spectacular, professional 3D animated movie poster acting as a party invitation. Theme: ${activeThemeLabel}. The art style should be highly detailed 3D render (similar to Pixar/Disney or Unreal Engine 5). In the center of the scene, there is a 3D character seamlessly integrated into the environment. The character is described as: ${childFeatures || 'a cute stylized kid matching the theme'}. The character is interacting with the epic scenery (${JSON.stringify(inspirationDna?.scenery || 'highly detailed thematic landscape')}). The color palette is vibrant: ${JSON.stringify(inspirationDna?.palette || 'vibrant colors')}. IMPORTANT: The image MUST contain perfectly rendered massive 3D typography integrated into the scene (e.g. floating blocks, neon signs, or cinematic titles) that explicitly reads exactly: "${name.toUpperCase()}", and "${projectData.age ? projectData.age + ' ANOS' : ''}". Somewhere elegant in the poster, include the text: "Data: ${projectData.date || 'TBD'} às ${projectData.time ? projectData.time + 'h' : 'TBD'}". Also prominently include the location text: "${projectData.location || ''}". Finally, include the short phrase: "${projectData.phrase || ''}". The typography must match the theme perfectly.`;
+        const dallePrompt = `Create a spectacular, professional 3D animated movie poster acting as a party invitation. Theme: ${activeThemeLabel}. The art style MUST BE highly stylized 3D cartoon animation (like Pixar or Disney, absolutely NOT photorealistic). In the center of the scene, there is a cute 3D cartoon character seamlessly integrated into the environment. The character is described as: ${childFeatures || 'a cute stylized kid matching the theme'}. Make sure the character looks like a 3D animated movie character. The character is interacting with the epic scenery (${JSON.stringify(inspirationDna?.scenery || 'highly detailed thematic landscape')}). The color palette is vibrant: ${JSON.stringify(inspirationDna?.palette || 'vibrant colors')}. IMPORTANT: The image MUST contain perfectly rendered massive 3D typography integrated into the scene (e.g. floating blocks, neon signs, or cinematic titles) that explicitly reads exactly: "${name.toUpperCase()}", and "${projectData.age ? projectData.age + ' ANOS' : ''}". Somewhere elegant in the poster, include the text: "Data: ${projectData.date || 'TBD'} às ${projectData.time ? projectData.time + 'h' : 'TBD'}". Also prominently include the location text: "${projectData.location || ''}". Finally, include the short phrase: "${projectData.phrase || ''}". The typography must match the theme perfectly.`;
         
         const dalleResponse = await openai.images.generate({
             model: "chatgpt-image-latest",
@@ -302,27 +302,26 @@ async function generateKitImages(projectData, childPhotos = [], inspirationRefs 
     await delay(12000);
     
     console.log(`[AI/Replicate] Gerando 2/5: Mascote...`);
-    // Usamos refB64 (imagem do tema) para o estilo, e NUNCA a foto da criança (childB64), 
-    // pois isso faria a IA gerar uma foto real. As feições da criança já estão no texto do prompt.
-    const mascoteUrl    = await generateImage(prompts.mascote,    { width: 1024, height: 1024, referenceImageBase64: refB64 });
+    // Removemos refB64 para evitar travar a composição e atrapalhar elementos isolados.
+    const mascoteUrl    = await generateImage(prompts.mascote,    { width: 1024, height: 1024 });
     
     console.log(`[AI/Replicate] Pausa de 12s para esfriar o Rate Limit...`);
     await delay(12000);
 
     console.log(`[AI/Replicate] Gerando 3/5: Elementos...`);
-    const elementosUrl  = await generateImage(prompts.elementos,  { width: 1024, height: 1024, referenceImageBase64: refB64 });
+    const elementosUrl  = await generateImage(prompts.elementos,  { width: 1024, height: 1024 });
     
     console.log(`[AI/Replicate] Pausa de 12s para esfriar o Rate Limit...`);
     await delay(12000);
 
     console.log(`[AI/Replicate] Gerando 4/5: Fundo...`);
-    const fundoUrl      = await generateImage(prompts.fundo,      { width: 1024, height: 1024, referenceImageBase64: refB64 });
+    const fundoUrl      = await generateImage(prompts.fundo,      { width: 1024, height: 1024 });
     
     console.log(`[AI/Replicate] Pausa de 12s para esfriar o Rate Limit...`);
     await delay(12000);
 
     console.log(`[AI/Replicate] Gerando 5/5: Papel Digital...`);
-    const papelUrl      = await generateImage(prompts.papel,      { width: 1024, height: 1024, referenceImageBase64: refB64 });
+    const papelUrl      = await generateImage(prompts.papel,      { width: 1024, height: 1024 });
 
     const elapsed = ((Date.now() - startTime) / 1000).toFixed(1);
     console.log(`[AI] ✅ ${Object.keys(prompts).length} imagens cenográficas geradas em ${elapsed}s`);

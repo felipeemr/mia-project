@@ -389,10 +389,15 @@ async function renderLembrete(project, bgSource, watermark = false, aiDna = null
         ctx.fillRect(0, 0, W, H);
     }
 
-    // --- Overlay branco semi-transparente ---
+    // --- Card branco sólido para garantir leitura perfeita (cobre a arte do fundo) ---
     ctx.save();
-    ctx.fillStyle = 'rgba(255,255,255,0.55)';
-    ctx.fillRect(W * 0.08, 50, W * 0.84, TEXT_AREA_HEIGHT - 80);
+    ctx.fillStyle = 'rgba(255,255,255,0.92)';
+    ctx.shadowColor = 'rgba(0,0,0,0.3)';
+    ctx.shadowBlur = 40;
+    ctx.beginPath();
+    // Um painel central com bordas arredondadas que cobre a maior parte da área superior
+    ctx.roundRect(W * 0.1, 80, W * 0.8, TEXT_AREA_HEIGHT + 150, 60);
+    ctx.fill();
     ctx.restore();
 
 
