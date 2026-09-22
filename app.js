@@ -688,7 +688,7 @@ function populateResultScreen() {
     }
 
     // 3. Mascote official
-    document.getElementById('mascot-val-title').textContent = `Mascote da ${p.name}`;
+    document.getElementById('mascot-val-title').textContent = `Mascote de ${p.name}`;
     const mascotImg = document.getElementById('mascot-img-render');
     if (mascotImg) {
         if (p.assetsUrls?.mascote) {

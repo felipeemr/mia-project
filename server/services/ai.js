@@ -48,7 +48,7 @@ function getPromptsForProject(projectData, childFeatures = null, inspirationDna 
         background: `${baseStyle}, full immersive party stationery scene for "${activeTheme}" theme${palettePrompt}${borderPrompt}${sceneryPrompt}${animalsPrompt}, composition features a beautifully designed frame or banner at the upper-middle for the party title, a clear uncluttered empty center area designed for invitation text, exquisitely rendered invitation template, empty text spaces, completely textless, no words${notesExtra}`,
 
         // Mascote Oficial: Personagem principal neutro, ditado pela foto da criança e referências
-        mascote: `${baseStyle}, full body character mascot illustration for "${activeTheme}" theme${palettePrompt}, dressed in themed outfit${childFeatures ? `, matching the exact physical appearance of the child: ${childFeatures}` : ''}, standing in full body pose on pure white background, isolated, highly detailed${notesExtra}`,
+        mascote: `${baseStyle}, ONE SINGLE character mascot illustration for "${activeTheme}" theme${palettePrompt}, dressed in themed outfit${childFeatures ? `, matching the exact physical appearance of the child: ${childFeatures}` : ''}, standing alone in full body pose on pure white background, isolated, highly detailed, strictly ONE person only${notesExtra}`,
 
         // Prancha de Elementos: Cartela de adesivos temáticos destacados
         elementos: `${baseStyle}, sticker sheet collection of separate individual thematic decorative elements for "${activeTheme}"${palettePrompt}${sceneryPrompt}${animalsPrompt}, laid out neatly on clean white background, isolated elements${notesExtra}`,
@@ -302,7 +302,8 @@ async function generateKitImages(projectData, childPhotos = [], inspirationRefs 
     await delay(12000);
     
     console.log(`[AI/Replicate] Gerando 2/5: Mascote...`);
-    const mascoteUrl    = await generateImage(prompts.mascote,    { width: 1024, height: 1024, referenceImageBase64: refB64 });
+    const mascoteRef = childB64 || refB64; // Usa a foto da criança para cartonizar, se houver
+    const mascoteUrl    = await generateImage(prompts.mascote,    { width: 1024, height: 1024, referenceImageBase64: mascoteRef });
     
     console.log(`[AI/Replicate] Pausa de 12s para esfriar o Rate Limit...`);
     await delay(12000);
