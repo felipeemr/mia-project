@@ -246,6 +246,36 @@ Ensure valid JSON output without markdown blocks.`
 }
 
 // ---------------------------------------------------------------------------
+// Sanitização de Copyright para DALL-E 3 (evita erro 400 de Safety System)
+// ---------------------------------------------------------------------------
+async function sanitizePromptForDalle(rawPrompt) {
+    if (!process.env.OPENAI_API_KEY) return rawPrompt;
+    try {
+        const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
+        const response = await openai.chat.completions.create({
+            model: 'gpt-4o-mini',
+            messages: [
+                {
+                    role: 'system',
+                    content: 'You are a DALL-E 3 prompt editor. Your ONLY job is to replace copyrighted characters/brands (like "Homem aranha", "Spider-man", "Mickey", "Disney", "Marvel") with generic visual descriptions (e.g., "red and blue spider-themed superhero", "cartoon mouse"). DO NOT change anything else in the prompt. Return the exact same prompt but sanitized for safety filters.'
+                },
+                {
+                    role: 'user',
+                    content: rawPrompt
+                }
+            ],
+            max_tokens: 800,
+            temperature: 0.3
+        });
+        const sanitized = response.choices[0]?.message?.content?.trim();
+        return sanitized || rawPrompt;
+    } catch (e) {
+        console.warn('[AI/Sanitizer] Erro ao sanitizar prompt:', e.message);
+        return rawPrompt;
+    }
+}
+
+// ---------------------------------------------------------------------------
 // Função principal: gera todas as imagens do kit para um projeto
 // ---------------------------------------------------------------------------
 /**
@@ -286,8 +316,11 @@ async function generateKitImages(projectData, childPhotos = [], inspirationRefs 
     let backgroundUrl = null;
     try {
         const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
-        const dallePrompt = `Create a spectacular, professional 3D animated movie poster acting as a party invitation. Theme: ${activeThemeLabel}. The art style MUST BE highly stylized 3D cartoon animation (like Pixar or Disney, absolutely NOT photorealistic). In the center of the scene, there is a cute 3D cartoon character seamlessly integrated into the environment. The character is described as: ${childFeatures || 'a cute stylized kid matching the theme'}. Make sure the character looks like a 3D animated movie character. The character is interacting with the epic scenery (${JSON.stringify(inspirationDna?.scenery || 'highly detailed thematic landscape')}). The color palette is vibrant: ${JSON.stringify(inspirationDna?.palette || 'vibrant colors')}. IMPORTANT: The image MUST contain perfectly rendered massive 3D typography integrated into the scene (e.g. floating blocks, neon signs, or cinematic titles) that explicitly reads exactly: "${name.toUpperCase()}", and "${projectData.age ? projectData.age + ' ANOS' : ''}". Somewhere elegant in the poster, include the text: "Data: ${projectData.date || 'TBD'} às ${projectData.time ? projectData.time + 'h' : 'TBD'}". Also prominently include the location text: "${projectData.location || ''}". Finally, include the short phrase: "${projectData.phrase || ''}". The typography must match the theme perfectly.`;
+        let dallePrompt = `Create a spectacular, professional 3D animated movie poster acting as a party invitation. Theme: ${activeThemeLabel}. The art style MUST BE highly stylized 3D cartoon animation (like Pixar or Disney, absolutely NOT photorealistic). In the center of the scene, there is a cute 3D cartoon character seamlessly integrated into the environment. The character is described as: ${childFeatures || 'a cute stylized kid matching the theme'}. Make sure the character looks like a 3D animated movie character. The character is interacting with the epic scenery (${JSON.stringify(inspirationDna?.scenery || 'highly detailed thematic landscape')}). The color palette is vibrant: ${JSON.stringify(inspirationDna?.palette || 'vibrant colors')}. IMPORTANT: The image MUST contain perfectly rendered massive 3D typography integrated into the scene (e.g. floating blocks, neon signs, or cinematic titles) that explicitly reads exactly: "${name.toUpperCase()}", and "${projectData.age ? projectData.age + ' ANOS' : ''}". Somewhere elegant in the poster, include the text: "Data: ${projectData.date || 'TBD'} às ${projectData.time ? projectData.time + 'h' : 'TBD'}". Also prominently include the location text: "${projectData.location || ''}". Finally, include the short phrase: "${projectData.phrase || ''}". The typography must match the theme perfectly.`;
         
+        console.log(`[AI/GPT-Image] Sanitizando prompt contra filtros de copyright...`);
+        dallePrompt = await sanitizePromptForDalle(dallePrompt);
+
         const dalleResponse = await openai.images.generate({
             model: "chatgpt-image-latest",
             prompt: dallePrompt,
@@ -358,8 +391,11 @@ async function generateKitImages(projectData, childPhotos = [], inspirationRefs 
     console.log(`[AI/GPT-Image] Gerando Lembrete Nativo (Bônus)...`);
     let lembreteUrl = null;
     try {
-        const lembretePrompt = `Create a spectacular, professional 3D animated movie poster acting as a party reminder. Theme: ${activeThemeLabel}. The art style MUST BE highly stylized 3D cartoon animation (like Pixar or Disney, absolutely NOT photorealistic). In the center of the scene, there is a cute 3D cartoon character seamlessly integrated into the environment. The character is described as: ${childFeatures || 'a cute stylized kid matching the theme'}. The color palette is vibrant: ${JSON.stringify(inspirationDna?.palette || 'vibrant colors')}. IMPORTANT: The image MUST contain perfectly rendered massive 3D typography integrated into the scene that explicitly reads EXACTLY: "FALTAM 5 DIAS", and below it smaller typography reading: "Para a festa do ${name.toUpperCase()}!". The typography must match the theme perfectly.`;
+        let lembretePrompt = `Create a spectacular, professional 3D animated movie poster acting as a party reminder. Theme: ${activeThemeLabel}. The art style MUST BE highly stylized 3D cartoon animation (like Pixar or Disney, absolutely NOT photorealistic). In the center of the scene, there is a cute 3D cartoon character seamlessly integrated into the environment. The character is described as: ${childFeatures || 'a cute stylized kid matching the theme'}. The color palette is vibrant: ${JSON.stringify(inspirationDna?.palette || 'vibrant colors')}. IMPORTANT: The image MUST contain perfectly rendered massive 3D typography integrated into the scene that explicitly reads EXACTLY: "FALTAM 5 DIAS", and below it smaller typography reading: "Para a festa do ${name.toUpperCase()}!". The typography must match the theme perfectly.`;
         
+        console.log(`[AI/GPT-Image] Sanitizando prompt do lembrete contra filtros de copyright...`);
+        lembretePrompt = await sanitizePromptForDalle(lembretePrompt);
+
         const lembreteResponse = await openai.images.generate({
             model: "chatgpt-image-latest",
             prompt: lembretePrompt,
