@@ -1250,9 +1250,14 @@ input:focus, textarea:focus, select:focus {
     flex-direction: column;
     align-items: center;
     justify-content: flex-start;
-    padding: 7% 7% 32% 7%; /* Leaves bottom 32% clear for the deer and rabbit characters */
+    padding: 8%;
+    margin: 10% 5%;
+    height: 60%;
+    background-color: rgba(255, 255, 255, 0.85); /* Fundo branco semi-transparente para leitura */
+    border-radius: 16px;
+    box-shadow: 0 4px 15px rgba(0,0,0,0.1);
     text-align: center;
-    gap: 2%; /* Distributes elements evenly without clashing */
+    gap: 2%;
 }
 
 .invite-head-decor {
@@ -1261,13 +1266,13 @@ input:focus, textarea:focus, select:focus {
 }
 
 .invite-name {
-    font-family: var(--font-accent);
-    font-size: 3.4rem;
-    font-weight: 400;
-    color: var(--pink-dark);
-    margin-top: -4px;
-    margin-bottom: -12px;
-    text-shadow: 0 1px 2px rgba(255,255,255,0.9);
+    font-family: var(--font-title);
+    font-size: 2.8rem;
+    font-weight: 800;
+    color: #222222;
+    margin-top: 0;
+    margin-bottom: 0;
+    text-shadow: 1px 1px 2px rgba(0,0,0,0.1);
 }
 
 .invite-phrase-connect {
@@ -1291,10 +1296,10 @@ input:focus, textarea:focus, select:focus {
 .invite-theme {
     font-size: 0.72rem;
     font-weight: 600;
-    color: var(--pink-dark);
-    background-color: var(--pink-secondary);
-    padding: 2px 8px;
-    border-radius: 10px;
+    color: #FFFFFF;
+    background-color: #333333;
+    padding: 4px 10px;
+    border-radius: 6px;
     margin-bottom: 2%;
 }
 

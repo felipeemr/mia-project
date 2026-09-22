@@ -7,7 +7,9 @@
     <!-- Google Fonts: Playfair Display for Titles, Poppins for Body, Sacramento & Great Vibes for script accents -->
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,400..900;1,400..900&family=Poppins:wght@300;400;500;600;700&family=Sacramento&family=Great+Vibes&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Nunito:wght@300;400;600;700;800&family=Great+Vibes&family=Playfair+Display:ital,wght@0,400..900;1,400..900&display=swap" rel="stylesheet">
+    <!-- Fontes Temáticas Dinâmicas da Fase 6 -->
+    <link href="https://fonts.googleapis.com/css2?family=Press+Start+2P&family=Fredoka:wght@300..700&family=Montserrat:ital,wght@0,100..900;1,100..900&family=Cormorant+Garamond:ital,wght@0,300..700;1,300..700&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="styles.css">
 </head>
 <body>
@@ -256,7 +258,7 @@
                                 </div>
                                 <div class="delivery-item-box">
                                     <span class="delivery-number-badge">10</span>
-                                    <span><strong>Mascote da Aniversariante</strong> (Estilo bonequinha)</span>
+                                    <span><strong>Mascote Principal</strong> (Personagem personalizado)</span>
                                 </div>
                                 <div class="delivery-item-box">
                                     <span class="delivery-number-badge">11</span>
@@ -496,28 +498,6 @@
                             <div class="invitation-container-mock watermarked" id="invite-mock-container">
                                 <img src="assets/infantil_bg.jpg" alt="Fundo Convite" class="invite-bg" id="invite-bg-image">
                                 
-                                <div class="invite-text-overlay">
-                                    <div class="invite-head-decor">🦌</div>
-                                    <h2 class="invite-name" id="invite-val-name">Helena</h2>
-                                    <p class="invite-phrase-connect">convida para celebrar seu aniversário de</p>
-                                    <h3 class="invite-age" id="invite-val-age">5 anos</h3>
-                                    <p class="invite-theme" id="invite-val-theme">Tema: Jardim Encantado</p>
-                                    
-                                    <div class="invite-details-box">
-                                        <div class="detail-item">
-                                            <span class="det-label">Data</span>
-                                            <span class="det-val" id="invite-val-date">12/10/2026</span>
-                                        </div>
-                                        <div class="detail-item">
-                                            <span class="det-label">Horário</span>
-                                            <span class="det-val" id="invite-val-time">15:30h</span>
-                                        </div>
-                                    </div>
-                                    
-                                    <p class="invite-location" id="invite-val-location">Buffet Jardim Secreto, Av. das Américas, 500</p>
-                                    <p class="invite-extra-phrase" id="invite-val-phrase">"Venha viver essa aventura no meu Jardim Encantado!"</p>
-                                </div>
-
                                 <div class="watermark-pattern-layer">
                                     <span>PRÉVIA MERAKI</span>
                                     <span>PRÉVIA MERAKI</span>
@@ -579,7 +559,7 @@
                                 </div>
                                 <div class="mascot-meta-info">
                                     <h4 id="mascot-val-title">Mascote Helena</h4>
-                                    <p>Estilo bonequinha aquarelada Meraki</p>
+                                    <p>Estilo personalizado 100% fiel ao tema</p>
                                 </div>
 
                                 <div class="watermark-pattern-layer">
@@ -610,14 +590,14 @@
                             <div class="branding-items-grid margin-top-sm">
                                 <div class="brand-item-box watermarked">
                                     <h5>Elemento Destaque 1</h5>
-                                    <div style="font-size: 3rem; padding: 10px;">🦌</div>
-                                    <span style="font-size: 0.7rem; color:var(--gray-muted);">Cervinho Florestal</span>
+                                    <div style="font-size: 3rem; padding: 10px;" id="ui-elem-0-emoji">🦌</div>
+                                    <span style="font-size: 0.7rem; color:var(--gray-muted);" id="ui-elem-0-name">Cervinho Florestal</span>
                                     <div class="watermark-pattern-layer"><span>PRÉVIA</span></div>
                                 </div>
                                 <div class="brand-item-box watermarked">
                                     <h5>Elemento Destaque 2</h5>
-                                    <div style="font-size: 3rem; padding: 10px;">🐰</div>
-                                    <span style="font-size: 0.7rem; color:var(--gray-muted);">Coelhinho Fofo</span>
+                                    <div style="font-size: 3rem; padding: 10px;" id="ui-elem-1-emoji">🐰</div>
+                                    <span style="font-size: 0.7rem; color:var(--gray-muted);" id="ui-elem-1-name">Coelhinho Fofo</span>
                                     <div class="watermark-pattern-layer"><span>PRÉVIA</span></div>
                                 </div>
                             </div>
@@ -630,18 +610,18 @@
                             
                             <div class="branding-items-grid margin-top-sm" style="grid-template-columns: repeat(3, 1fr);">
                                 <div class="brand-item-box watermarked">
-                                    <div style="font-size: 2.2rem;">🦋</div>
-                                    <span style="font-size: 0.65rem; color:var(--gray-muted);">Borboleta</span>
+                                    <div style="font-size: 2.2rem;" id="ui-elem-2-emoji">🦋</div>
+                                    <span style="font-size: 0.65rem; color:var(--gray-muted);" id="ui-elem-2-name">Borboleta</span>
                                     <div class="watermark-pattern-layer"><span>PRÉVIA</span></div>
                                 </div>
                                 <div class="brand-item-box watermarked">
-                                    <div style="font-size: 2.2rem;">🌸</div>
-                                    <span style="font-size: 0.65rem; color:var(--gray-muted);">Floral</span>
+                                    <div style="font-size: 2.2rem;" id="ui-elem-3-emoji">🌸</div>
+                                    <span style="font-size: 0.65rem; color:var(--gray-muted);" id="ui-elem-3-name">Floral</span>
                                     <div class="watermark-pattern-layer"><span>PRÉVIA</span></div>
                                 </div>
                                 <div class="brand-item-box watermarked">
-                                    <div style="font-size: 2.2rem;">🎀</div>
-                                    <span style="font-size: 0.65rem; color:var(--gray-muted);">Laço</span>
+                                    <div style="font-size: 2.2rem;" id="ui-elem-4-emoji">🎀</div>
+                                    <span style="font-size: 0.65rem; color:var(--gray-muted);" id="ui-elem-4-name">Laço</span>
                                     <div class="watermark-pattern-layer"><span>PRÉVIA</span></div>
                                 </div>
                             </div>

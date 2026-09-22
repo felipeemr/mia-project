@@ -124,6 +124,7 @@ router.post('/', optionalAuth, upload.fields([
     // --- 3. Definir fundo: tenta IA, cai em padrão se falhar ---
     let bgBuffer    = null;
     let assetsUrls  = {};
+    let aiDna       = null;
     const bgDefault = DEFAULT_BG[projectData.type];
 
     try {
@@ -132,19 +133,18 @@ router.post('/', optionalAuth, upload.fields([
         if (aiAvailable) {
             console.log('[Generate] Chamando API de IA para geração das imagens...');
             const aiImages = await generateKitImages(projectData, childPhotos, inspirationRefs);
-
-
+            aiDna = aiImages._dna || null;
 
             // Salva cada imagem no Supabase Storage com URL permanente
             const savePromises = Object.entries(aiImages).map(async ([key, url]) => {
-                if (!url) return;
+                if (!url || key === '_dna') return; // Ignora _dna, pois não é uma URL de imagem
                 try {
-                    const storagePath = `projects/${projectId || Date.now()}/${key}.png`;
-                    const permanentUrl = await uploadFromUrl(url, storagePath);
-                    assetsUrls[key] = permanentUrl;
-                } catch (uploadErr) {
-                    console.warn(`[Generate] Falha ao salvar ${key}:`, uploadErr.message);
-                    assetsUrls[key] = url; // usa URL temporária como fallback
+                    const savedUrl = await uploadFromUrl(url, `projects/${projectId}/${key}.png`);
+                    assetsUrls[key] = savedUrl;
+                } catch (e) {
+                    console.warn(`[Generate] Falha ao salvar ${key}:`, e.message);
+                    // Fallback: se o Supabase falhar (offline/ENOTFOUND), usamos a URL original da IA
+                    assetsUrls[key] = url;
                 }
             });
             await Promise.all(savePromises);
@@ -162,35 +162,48 @@ router.post('/', optionalAuth, upload.fields([
             }
         }
     } catch (aiErr) {
-        console.warn('[Generate] Falha ao processar imagens da IA:', aiErr.message);
+        console.error('[Generate] Falha crítica ao processar imagens da IA:', aiErr.message);
+        
+        // Atualiza status no banco para falha se possível
+        if (projectId) {
+            await supabaseAdmin.from('projects').update({ status: 'failed' }).eq('id', projectId);
+        }
+
+        // Interrompe a requisição e retorna erro pro frontend (removemos o mockup padrão)
+        return res.status(500).json({ 
+            error: 'Não foi possível gerar a arte. Por favor, olhe os logs do servidor para mais detalhes.', 
+            detail: aiErr.message 
+        });
     }
 
+    // Se o buffer for inválido por qualquer outro motivo, rejeitamos para evitar gerar imagem com fundo vazio
+    if (!bgBuffer) {
+        console.error('[Generate] ERRO: bgBuffer está vazio. Estado atual:');
+        console.error('  -> assetsUrls.background:', !!assetsUrls.background, typeof assetsUrls.background === 'string' ? assetsUrls.background.substring(0, 50) + '...' : assetsUrls.background);
+        console.error('  -> projectId:', projectId);
+        return res.status(500).json({ error: 'Falha na obtenção da imagem base gerada.' });
+    }
 
-    // Fallback: usa imagem padrão do projeto
-    if (!bgBuffer) bgBuffer = fs.readFileSync(bgDefault);
-
-    // --- 4. Renderizar convite e lembrete em alta resolução ---
+    // --- 4. Renderizar lembrete em alta resolução ---
     let conviteUrl   = null;
     let lembreteUrl  = null;
     let conviteThumb = null;
 
     try {
-        const [convitePng, lembretePng] = await Promise.all([
-            renderConvite(projectData,  bgBuffer, true),  // watermark = true para prévia
-            renderLembrete(projectData, bgBuffer, true),
-        ]);
+        // FASE 7: Não renderizamos o convite por cima, pois o DALL-E 3 já desenha o pôster perfeito.
+        // Renderizamos apenas o lembrete (que precisa da contagem regressiva).
+        const lembretePng = await renderLembrete(projectData, bgBuffer, true, aiDna);
 
-        conviteThumb = await createThumbnail(convitePng, 600);
+        // O thumbnail do convite será feito usando a imagem pura do DALL-E 3 (bgBuffer)
+        conviteThumb = await createThumbnail(bgBuffer, 600);
 
         if (projectId) {
-            [conviteUrl, lembreteUrl] = await Promise.all([
-                uploadBuffer(convitePng,   `projects/${projectId}/convite_preview.png`,  'image/png'),
-                uploadBuffer(lembretePng,  `projects/${projectId}/lembrete_preview.png`, 'image/png'),
-                uploadBuffer(conviteThumb, `projects/${projectId}/convite_thumb.jpg`,    'image/jpeg'),
-            ]);
+            // O convitePreview no Supabase também será nulo (o sistema usará o background).
+            lembreteUrl = await uploadBuffer(lembretePng,  `projects/${projectId}/lembrete_preview.png`, 'image/png');
+            await uploadBuffer(conviteThumb, `projects/${projectId}/convite_thumb.jpg`,    'image/jpeg');
         }
 
-        assetsUrls.convite_preview  = conviteUrl;
+        assetsUrls.convite_preview  = null; // Usará background
         assetsUrls.lembrete_preview = lembreteUrl;
     } catch (renderErr) {
         console.warn('[Generate] Aviso na renderização:', renderErr.message);
@@ -231,6 +244,8 @@ router.post('/', optionalAuth, upload.fields([
             // Convite e lembrete renderizados em alta resolução (com marca d'água)
             convitePreview:  assetsUrls.convite_preview  || null,
             lembretePreview: assetsUrls.lembrete_preview || null,
+            // DNA Visual extraído (tipografia, ícones)
+            _dna:            aiDna,
         },
         project: {
             ...projectData,

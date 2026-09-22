@@ -126,11 +126,17 @@ async function apiGenerateKit(projectData) {
             method:  'POST',
             headers: _authToken ? { 'Authorization': `Bearer ${_authToken}` } : {},
             body:    formData,
-            signal:  AbortSignal.timeout(180000),
+            signal:  AbortSignal.timeout(300000), // 5 minutos para suportar o rate limit do Replicate Free
         });
-        if (!res.ok) return null;
+        if (!res.ok) {
+            const errData = await res.json().catch(() => ({}));
+            throw new Error(errData.error || 'Falha desconhecida no servidor.');
+        }
         return await res.json();
-    } catch (e) { console.warn('[API/Generate]', e.message); return null; }
+    } catch (e) { 
+        console.warn('[API/Generate]', e.message); 
+        throw e; // Lançar o erro para que a interface saiba que falhou
+    }
 }
 
 
@@ -312,7 +318,37 @@ function toggleDevPanel() {
     }
 }
 
-// 5. CLIENT GENERATOR FORM STEP NAVIGATION
+// Aplica Tipografia e Elementos UI dinâmicos da Fase 6
+function applyAiDna(dna) {
+    if (!dna) return;
+
+    // 1. Tipografia Dinâmica
+    if (dna.typography) {
+        const root = document.documentElement;
+        let fontFamily = "'Playfair Display', serif"; // fallback
+        switch(dna.typography.toLowerCase()) {
+            case 'pixel':   fontFamily = "'Press Start 2P', cursive"; break;
+            case 'elegant': fontFamily = "'Playfair Display', serif"; break;
+            case 'playful': fontFamily = "'Fredoka', sans-serif"; break;
+            case 'modern':  fontFamily = "'Montserrat', sans-serif"; break;
+            case 'rustic':  fontFamily = "'Cormorant Garamond', serif"; break;
+        }
+        root.style.setProperty('--font-title', fontFamily);
+    }
+
+    // 2. Elementos UI Dinâmicos (Emojis e Nomes)
+    if (dna.uiElements && Array.isArray(dna.uiElements)) {
+        dna.uiElements.forEach((elem, index) => {
+            const emojiNode = document.getElementById(`ui-elem-${index}-emoji`);
+            const nameNode  = document.getElementById(`ui-elem-${index}-name`);
+            if (emojiNode && elem.emoji) emojiNode.textContent = elem.emoji;
+            if (nameNode && elem.name)   nameNode.textContent  = elem.name;
+        });
+    }
+}
+
+// ---------------------------------------------------------------------------
+// HELPERS & EXTRASTOR FORM STEP NAVIGATION
 let currentFormStep = 1;
 function nextStep(stepNum) {
     if (stepNum === 3) {
@@ -564,6 +600,7 @@ function startLoadingProgressAnimation() {
     let tipIdx = 0;
     let apiResult = null;
     let apiDone = false;
+    let apiError = null;
 
     const tipInterval = setInterval(() => {
         tips.forEach(t => t.classList.remove('active'));
@@ -578,7 +615,10 @@ function startLoadingProgressAnimation() {
             apiDone   = true;
             console.log('[App] Resposta da API recebida:', result ? '✅ Sucesso' : '⚠️ Modo mock');
         })
-        .catch(() => { apiDone = true; });
+        .catch((err) => { 
+            apiError = err.message;
+            apiDone = true; 
+        });
 
     // Velocidade da barra: aumenta progressivamente até 80%, depois aguarda a API
     const interval = setInterval(() => {
@@ -600,12 +640,23 @@ function startLoadingProgressAnimation() {
             clearInterval(interval);
             clearInterval(tipInterval);
             
+            if (apiError) {
+                alert(`⚠️ Ocorreu um problema na geração:\n\n${apiError}`);
+                showView('generator'); // Volta para o formulário
+                return;
+            }
+            
             showView('result');
             populateResultScreen();
 
             // Aplica as imagens reais da IA (se disponíveis)
             if (apiResult?.assetsUrls) {
                 applyRealAssets(apiResult.assetsUrls, apiResult.projectId);
+            }
+            
+            // Processa DNA da IA (Fontes e Ícones) da Fase 6
+            if (apiResult?.assetsUrls?._dna) {
+                applyAiDna(apiResult.assetsUrls._dna);
             }
         }
     }, 80);
@@ -616,25 +667,9 @@ function startLoadingProgressAnimation() {
 function populateResultScreen() {
     const p = appState.currentProject;
     
-    // 1. Invitation overlay texts
-    document.getElementById('invite-val-name').textContent = p.name;
-    document.getElementById('invite-val-age').textContent = p.age;
-    document.getElementById('invite-val-theme').textContent = `Tema: ${p.theme}`;
-    document.getElementById('invite-val-date').textContent = p.date;
-    document.getElementById('invite-val-time').textContent = `${p.time}h`;
-    document.getElementById('invite-val-location').textContent = p.location;
-    document.getElementById('invite-val-phrase').textContent = `"${p.phrase}"`;
+    // 1. Invitation overlay texts (REMOVIDO PARA FASE 7 - Pôster DALL-E 3)
     const bgUrl = p.assetsUrls?.convitePreview || p.assetsUrls?.background || p.bgTemplate;
     document.getElementById('invite-bg-image').src = bgUrl;
-    
-    const headerDecor = document.querySelector('.invite-head-decor');
-    if (p.type === 'infantil') {
-        headerDecor.textContent = '🦌';
-    } else if (p.type === 'debutante') {
-        headerDecor.textContent = '👑';
-    } else {
-        headerDecor.textContent = '🌿';
-    }
     
     // 2. RSVP/Reminder overlay texts
     document.getElementById('reminder-val-name').textContent = p.name;

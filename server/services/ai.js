@@ -8,10 +8,17 @@ const Replicate = require('replicate');
 const OpenAI    = require('openai');
 const axios     = require('axios');
 
+// Função utilitária para delay (evita rate limits)
+const delay = ms => new Promise(resolve => setTimeout(resolve, ms));
+
 // ---------------------------------------------------------------------------
-// Estilo base de papelaria de luxo (estilo "Fazendinha da Betina")
+// Estilo base dinâmico por tipo de festa
 // ---------------------------------------------------------------------------
-const BASE_STYLE = 'ultra-detailed luxury personalized party stationery, cute chibi doll illustration, soft dimensional 3D depth, delicate pastel watercolor and digital art, Brazilian festa infantil de luxo, high resolution, 8k, masterpiece, no text';
+function getBaseStyle(type) {
+    if (type === 'infantil') return 'ultra-detailed luxury personalized party stationery, playful and vibrant illustration, high resolution, 8k, masterpiece, no text';
+    if (type === 'debutante') return 'ultra-detailed luxury personalized party stationery, elegant and glamorous illustration, sophisticated aesthetic, high resolution, 8k, masterpiece, no text';
+    return 'ultra-detailed luxury personalized party stationery, elegant, modern and sophisticated minimalist aesthetic, high resolution, 8k, masterpiece, no text';
+}
 
 /**
  * Gera prompts cenográficos imersivos e dinâmicos para o kit completo
@@ -24,32 +31,33 @@ function getPromptsForProject(projectData, childFeatures = null, inspirationDna 
         ? 'Princesa Realeza' 
         : type === 'adulto' 
             ? 'Botânico Minimalista' 
-            : 'Fazendinha Delicada';
+            : 'Festa Infantil';
 
     const activeTheme = (theme && theme.trim()) || defaultTheme;
+    const baseStyle   = getBaseStyle(type);
 
     // Elementos da inspiração (se houver análise de visão)
-    const palettePrompt  = inspirationDna?.palette  ? `, color palette: ${inspirationDna.palette}` : ', soft pastel tones with gentle pinks, cream, warm wood and subtle accents';
-    const sceneryPrompt  = inspirationDna?.scenery  ? `, scenic elements: ${inspirationDna.scenery}` : '';
-    const borderPrompt   = inspirationDna?.border   ? `, outer border: ${inspirationDna.border}` : ', decorative pastel gingham plaid border frame with soft rounded corners';
-    const animalsPrompt  = inspirationDna?.animals  ? `, cute characters: ${inspirationDna.animals}` : ', adorable baby animals with matching pastel bows along the bottom';
+    const palettePrompt  = inspirationDna?.palette  ? `, exact color palette: ${inspirationDna.palette}` : '';
+    const sceneryPrompt  = inspirationDna?.scenery  ? `, exact scenic elements: ${inspirationDna.scenery}` : '';
+    const borderPrompt   = inspirationDna?.border   ? `, outer border frame style: ${inspirationDna.border}` : '';
+    const animalsPrompt  = inspirationDna?.animals  ? `, secondary characters or elements: ${inspirationDna.animals}` : '';
     const notesExtra     = notes ? `, extra details: ${notes}` : '';
 
     return {
-        // Convite Principal: Cenário temático completo com placas para texto
-        background: `${BASE_STYLE}, full immersive party stationery scene for "${activeTheme}" theme${palettePrompt}${borderPrompt}${sceneryPrompt}${animalsPrompt}, composition features a rustic wooden plaque or parchment ribbon banner at the upper-middle for the party title, a clear uncluttered soft cream center area designed for invitation text and icons, and a small wooden post sign at the bottom footer, beautiful sunny sky, flower meadows, exquisitely rendered invitation template, empty text spaces, no text${notesExtra}`,
+        // Convite Principal: Cenário temático limpo (depende estritamente das referências)
+        background: `${baseStyle}, full immersive party stationery scene for "${activeTheme}" theme${palettePrompt}${borderPrompt}${sceneryPrompt}${animalsPrompt}, composition features a beautifully designed frame or banner at the upper-middle for the party title, a clear uncluttered empty center area designed for invitation text, exquisitely rendered invitation template, empty text spaces, completely textless, no words${notesExtra}`,
 
-        // Mascote Oficial: Bonequinha/personagem chibi fofo temático
-        mascote: `${BASE_STYLE}, full body cute chibi character mascot for "${activeTheme}" theme, dressed in charming themed outfit with accessories${childFeatures ? `, matching child appearance: ${childFeatures}` : ', big sparkling expressive eyes, sweet gentle smile'}, standing in full body pose on pure white background, isolated${notesExtra}`,
+        // Mascote Oficial: Personagem principal neutro, ditado pela foto da criança e referências
+        mascote: `${baseStyle}, full body character mascot illustration for "${activeTheme}" theme${palettePrompt}, dressed in themed outfit${childFeatures ? `, matching the exact physical appearance of the child: ${childFeatures}` : ''}, standing in full body pose on pure white background, isolated, highly detailed${notesExtra}`,
 
         // Prancha de Elementos: Cartela de adesivos temáticos destacados
-        elementos: `${BASE_STYLE}, sticker sheet collection of separate individual thematic decorative elements for "${activeTheme}" (baby animals with pink bows, wooden signs, themed icons, flower clusters, sun, clouds, ribbons), laid out neatly on clean white background, isolated elements${notesExtra}`,
+        elementos: `${baseStyle}, sticker sheet collection of separate individual thematic decorative elements for "${activeTheme}"${palettePrompt}${sceneryPrompt}${animalsPrompt}, laid out neatly on clean white background, isolated elements${notesExtra}`,
 
         // Fundo / Wallpaper limpo
-        fundo: `${BASE_STYLE}, seamless subtle background pattern inspired by "${activeTheme}", delicate pastel motifs, soft textures, tileable wallpaper, no text${notesExtra}`,
+        fundo: `${baseStyle}, seamless subtle background pattern inspired by "${activeTheme}"${palettePrompt}, decorative motifs, soft textures, tileable wallpaper, no text${notesExtra}`,
 
         // Papel digital de scrapbook
-        papel: `${BASE_STYLE}, digital scrapbook paper with repeating pattern of "${activeTheme}" motifs, pastel gingham or floral repeat pattern, seamless pattern${notesExtra}`,
+        papel: `${baseStyle}, digital scrapbook paper with repeating pattern of "${activeTheme}" motifs${palettePrompt}${borderPrompt}, seamless repeat pattern${notesExtra}`,
     };
 }
 
@@ -61,16 +69,23 @@ function getPromptsForProject(projectData, childFeatures = null, inspirationDna 
 async function generateWithReplicate(prompt, options = {}) {
     const replicate = new Replicate({ auth: process.env.REPLICATE_API_TOKEN });
 
-    const model = options.model || 'black-forest-labs/flux-1.1-pro';
+    // Para Image-to-Image nativo de qualidade superior, usamos o SDXL padrão da Stability AI (com a hash de versão para evitar erro 404)
+    const model = options.model || 'stability-ai/sdxl:39ed52f2a78e934b3ba6e2a89f5b1c712de7dfea535525255b1aa35c5565e08b';
+    
     const input  = {
         prompt,
-        width:       options.width  || 768,
+        width:       options.width  || 1024,
         height:      options.height || 1024,
         num_outputs: 1,
-        output_format: 'png',
-        output_quality: 95,
         ...options.replicateInput,
     };
+
+    // Mágica do Estilo Canva (Image-to-Image / IP-Adapter)
+    if (options.referenceImageBase64) {
+        input.image = `data:image/jpeg;base64,${options.referenceImageBase64}`;
+        input.prompt_strength = 0.85; // 85% de liberdade para o prompt, 15% de trava estrutural exata da imagem base
+        console.log(`[AI/Replicate] 🪄 Injetando imagem de referência (Image-to-Image ativado)`);
+    }
 
     console.log(`[AI/Replicate] Gerando com modelo ${model}...`);
     const output = await replicate.run(model, { input });
@@ -158,7 +173,7 @@ async function analyzeChildPhoto(photoBuffer) {
                     content: [
                         { 
                             type: 'text', 
-                            text: 'Analyze this photo of a child. Describe physical appearance (hair style/color/pigtails/curls, skin tone, eye color, happy facial expression) in 1-2 concise sentences in English for an artist creating a cute chibi doll character illustration.' 
+                            text: 'Analyze this photo of a person. Describe physical appearance (hair style/color, skin tone, eye color, facial expression) in 1-2 concise sentences in English for an artist creating a stylized character illustration. Do not dictate a specific art style (like chibi or anime), focus strictly on physical traits.' 
                         },
                         { type: 'image_url', image_url: { url: `data:image/jpeg;base64,${b64}` } }
                     ]
@@ -192,20 +207,21 @@ async function analyzeReferenceInspiration(refBuffer) {
                     content: [
                         { 
                             type: 'text', 
-                            text: 'Analyze this luxury party stationery invitation design reference. Extract in JSON format:\n' +
-                                  '{\n' +
-                                  '  "palette": "concise list of 3-5 pastel colors (e.g. pastel pink, baby gingham, cream, soft warm wood)",\n' +
-                                  '  "scenery": "key background scenery structures (e.g. pink barn, windmill, white picket fence, flower meadows)",\n' +
-                                  '  "border": "outer border frame style (e.g. pink gingham plaid checkered border with rounded corners)",\n' +
-                                  '  "animals": "cute sidekick characters/animals (e.g. baby sheep, calf, piglet, chicken with pink bows)",\n' +
-                                  '  "theme": "the primary theme name (e.g. Fazendinha, Minecraft, Safari, Princesa)"\n' +
-                                  '}\nReturn ONLY valid JSON.'
+                            text: `Analyze this image (party decor/theme inspiration). Extract the visual DNA in JSON format with exactly these fields:
+- "palette": array of 5 exact colors (e.g. ["forest green", "neon pink", "matte black", "gold foil", "cream"]).
+- "scenery": array of 2-3 background/scenic elements (e.g. ["enchanted forest with glowing mushrooms", "castle silhouette"]).
+- "border": string describing border or frame style (e.g. "ornate gold filigree", "pixelated with sharp corners").
+- "animals": array of 2-3 secondary characters/animals if present, or themed objects.
+- "theme": a 1-3 word summary of the core theme.
+- "typography": string, choose exactly one category that fits the theme best: "pixel", "elegant", "playful", "modern", or "rustic".
+- "uiElements": array of exactly 5 objects, each representing an icon/element for the theme. Each object must have "name" (short string in Portuguese) and "emoji" (a single Unicode emoji). Example: [{"name": "Bloco de Terra", "emoji": "🟩"}, {"name": "Espada", "emoji": "🗡️"}].
+Ensure valid JSON output without markdown blocks.` 
                         },
-                        { type: 'image_url', image_url: { url: `data:image/jpeg;base64,${b64}` } }
+                        { type: 'image_url', image_url: { url: `data:image/jpeg;base64,${b64}`, detail: 'low' } }
                     ]
                 }
             ],
-            max_tokens: 250,
+            max_tokens: 300,
             response_format: { type: 'json_object' }
         });
         const content = response.choices[0]?.message?.content?.trim();
@@ -246,18 +262,67 @@ async function generateKitImages(projectData, childPhotos = [], inspirationRefs 
 
     const activeThemeLabel = projectData.theme || inspirationDna?.theme || 'Padrão';
     console.log(`[AI] Iniciando geração cenográfica para "${name}" - Tema: "${activeThemeLabel}"`);
-    console.log(`[AI] Gerando 5 imagens cenográficas em paralelo...`);
+    console.log(`[AI] Gerando 5 imagens cenográficas em sequência...`);
 
     const startTime = Date.now();
 
-    // Gera todas as imagens em paralelo para velocidade máxima
-    const [backgroundUrl, mascoteUrl, elementosUrl, fundoUrl, papelUrl] = await Promise.all([
-        generateImage(prompts.background, { width: 768,  height: 1024 }),
-        generateImage(prompts.mascote,    { width: 768,  height: 768  }),
-        generateImage(prompts.elementos,  { width: 1024, height: 1024 }),
-        generateImage(prompts.fundo,      { width: 1024, height: 1024 }),
-        generateImage(prompts.papel,      { width: 1024, height: 1024 }),
-    ]);
+    // Converte os buffers de imagem para base64 para injeção de estilo (se o usuário enviou)
+    const childB64 = (childPhotos && childPhotos[0]?.buffer) ? childPhotos[0].buffer.toString('base64') : null;
+    const refB64 = (inspirationRefs && inspirationRefs[0]?.buffer) ? inspirationRefs[0].buffer.toString('base64') : null;
+
+    // --- FASE 7: PÔSTER INTEGRADO VIA GPT-IMAGE / FLUX ---
+    console.log(`[AI/GPT-Image] Gerando 1/5: Convite Pôster Integrado...`);
+    let backgroundUrl = null;
+    try {
+        const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
+        const dallePrompt = `Create a spectacular, professional 3D animated movie poster acting as a party invitation. Theme: ${activeThemeLabel}. The art style should be highly detailed 3D render (similar to Pixar/Disney or Unreal Engine 5). In the center of the scene, there is a 3D character seamlessly integrated into the environment. The character is described as: ${childFeatures || 'a cute stylized kid matching the theme'}. The character is interacting with the epic scenery (${JSON.stringify(inspirationDna?.scenery || 'highly detailed thematic landscape')}). The color palette is vibrant: ${JSON.stringify(inspirationDna?.palette || 'vibrant colors')}. IMPORTANT: The image MUST contain perfectly rendered massive 3D typography integrated into the scene (e.g. floating blocks, neon signs, or cinematic titles) that explicitly reads exactly: "${name.toUpperCase()}", and "${projectData.age ? projectData.age + ' ANOS' : ''}". Somewhere elegant in the poster, include the text: "Data: ${projectData.date || 'TBD'} às ${projectData.time ? projectData.time + 'h' : 'TBD'}". Also prominently include the location text: "${projectData.location || ''}". Finally, include the short phrase: "${projectData.phrase || ''}". The typography must match the theme perfectly.`;
+        
+        const dalleResponse = await openai.images.generate({
+            model: "chatgpt-image-latest",
+            prompt: dallePrompt,
+            n: 1,
+            size: "1024x1536", // Vertical poster ratio supported by GPT Image
+        });
+        const item = dalleResponse.data[0];
+        backgroundUrl = item.url || (item.b64_json ? `data:image/png;base64,${item.b64_json}` : null) || (item.b64 ? `data:image/png;base64,${item.b64}` : null);
+        console.log(`[AI/GPT-Image] ✅ Pôster gerado com sucesso! backgroundUrl existe:`, !!backgroundUrl);
+    } catch (e) {
+        console.warn(`[AI/GPT-Image] Falha ao gerar pôster: ${e.message}. Acionando fallback para FLUX.1 no Replicate...`);
+        // O Flux.1 é excelente em tipografia. Usamos uma narrativa rica como no Midjourney/ChatGPT.
+        const fluxPrompt = `A spectacular professional 3D animated movie poster acting as a party invitation. Theme: ${activeThemeLabel}. The art style is a highly detailed 3D render (Pixar/Disney or Unreal Engine 5 style). In the center of the scene stands a 3D character seamlessly integrated into the epic environment. The character's physical traits: ${childFeatures || 'a cute stylized kid matching the theme'}. The character is interacting with the scenery (${JSON.stringify(inspirationDna?.scenery || 'highly detailed thematic landscape')}). Color palette: ${JSON.stringify(inspirationDna?.palette || 'vibrant colors')}. The image MUST contain perfectly rendered massive 3D typography integrated into the scene (like cinematic titles or carved in the environment) that explicitly reads EXACTLY: "${name.toUpperCase()}", and "${projectData.age ? projectData.age + ' ANOS' : ''}". Also include the text: "Data: ${projectData.date || 'TBD'} às ${projectData.time ? projectData.time + 'h' : 'TBD'}". Below that, write the location text: "${projectData.location || ''}". Also include the inviting phrase: "${projectData.phrase || ''}". The typography perfectly matches the theme's aesthetic. Masterpiece, 8k resolution, highly detailed.`;
+        backgroundUrl = await generateWithReplicate(fluxPrompt, { 
+            model: 'black-forest-labs/flux-schnell', 
+            width: 1024, 
+            height: 1024 
+            // Flux não aceita referenceImageBase64 diretamente via API padrão, então mandamos só o prompt
+        });
+    }
+    
+    console.log(`[AI/Replicate] Pausa de 12s para esfriar o Rate Limit...`);
+    await delay(12000);
+    
+    console.log(`[AI/Replicate] Gerando 2/5: Mascote...`);
+    // Usamos refB64 (imagem do tema) para o estilo, e NUNCA a foto da criança (childB64), 
+    // pois isso faria a IA gerar uma foto real. As feições da criança já estão no texto do prompt.
+    const mascoteUrl    = await generateImage(prompts.mascote,    { width: 1024, height: 1024, referenceImageBase64: refB64 });
+    
+    console.log(`[AI/Replicate] Pausa de 12s para esfriar o Rate Limit...`);
+    await delay(12000);
+
+    console.log(`[AI/Replicate] Gerando 3/5: Elementos...`);
+    const elementosUrl  = await generateImage(prompts.elementos,  { width: 1024, height: 1024, referenceImageBase64: refB64 });
+    
+    console.log(`[AI/Replicate] Pausa de 12s para esfriar o Rate Limit...`);
+    await delay(12000);
+
+    console.log(`[AI/Replicate] Gerando 4/5: Fundo...`);
+    const fundoUrl      = await generateImage(prompts.fundo,      { width: 1024, height: 1024, referenceImageBase64: refB64 });
+    
+    console.log(`[AI/Replicate] Pausa de 12s para esfriar o Rate Limit...`);
+    await delay(12000);
+
+    console.log(`[AI/Replicate] Gerando 5/5: Papel Digital...`);
+    const papelUrl      = await generateImage(prompts.papel,      { width: 1024, height: 1024, referenceImageBase64: refB64 });
 
     const elapsed = ((Date.now() - startTime) / 1000).toFixed(1);
     console.log(`[AI] ✅ ${Object.keys(prompts).length} imagens cenográficas geradas em ${elapsed}s`);
@@ -268,6 +333,7 @@ async function generateKitImages(projectData, childPhotos = [], inspirationRefs 
         elementos:    elementosUrl,
         fundo:        fundoUrl,
         papel:        papelUrl,
+        _dna:         inspirationDna, // DNA usado pelo frontend para fontes e ícones dinâmicos
     };
 }
 

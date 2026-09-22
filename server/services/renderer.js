@@ -16,10 +16,11 @@ const A4_HEIGHT = 3508;
 const TEXT_AREA_HEIGHT = Math.round(A4_HEIGHT * 0.68);
 
 // Paleta de cores por tipo
+// Cores neutras mais robustas para contraste (Dark/Light)
 const COLORS = {
-    infantil:  { primary: '#4A3728', accent: '#69D7D1', subtitle: '#E8779A', divider: '#F7A8C8' },
-    debutante: { primary: '#3D2B1F', accent: '#DFBA73', subtitle: '#C48B9F', divider: '#DFBA73' },
-    adulto:    { primary: '#2C3E2D', accent: '#3A7D7A', subtitle: '#7A7A6A', divider: '#3A7D7A' },
+    infantil:  { primary: '#1A1A1A', accent: '#444444', subtitle: '#333333', divider: '#888888' },
+    debutante: { primary: '#222222', accent: '#D4AF37', subtitle: '#444444', divider: '#D4AF37' },
+    adulto:    { primary: '#111111', accent: '#555555', subtitle: '#333333', divider: '#888888' },
 };
 
 const DECOR = { infantil: '~ ✦ ~', debutante: '~ ♛ ~', adulto: '~ ✦ ~' };
@@ -193,7 +194,7 @@ function drawPlaqueBadge(ctx, text, x, y, width, height, bgColor = '#DFBA73', te
     ctx.stroke();
 
     // Texto da placa
-    ctx.font = 'bold 52px serif';
+    ctx.font = 'bold 52px sans-serif';
     ctx.fillStyle = textColor;
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
@@ -205,7 +206,7 @@ function drawPlaqueBadge(ctx, text, x, y, width, height, bgColor = '#DFBA73', te
 // ---------------------------------------------------------------------------
 // Renderizador do Convite
 // ---------------------------------------------------------------------------
-async function renderConvite(project, bgSource, watermark = false) {
+async function renderConvite(project, bgSource, watermark = false, aiDna = null) {
     console.log(`[Renderer] Renderizando convite de luxo para "${project.name}"...`);
 
     const W = A4_WIDTH;
@@ -229,34 +230,52 @@ async function renderConvite(project, bgSource, watermark = false) {
     }
 
     const cx = W / 2;
-
     let y = 480;
 
-    // 1. Frase de abertura de luxo
-    drawText(ctx, 'Você está sendo convidado para a...', cx, y, 'italic 62px serif', '#7A5843');
+    // Determina a família de fonte baseada no DNA
+    let baseFont = 'sans-serif';
+    if (aiDna && aiDna.typography) {
+        switch(aiDna.typography.toLowerCase()) {
+            case 'pixel':   baseFont = 'monospace'; break;
+            case 'elegant': baseFont = 'serif'; break;
+            case 'playful': baseFont = 'sans-serif'; break;
+            case 'modern':  baseFont = 'sans-serif'; break;
+            case 'rustic':  baseFont = 'serif'; break;
+        }
+    }
+
+    // --- Overlay branco semi-transparente para garantir leitura em fundos escuros ---
+    ctx.save();
+    ctx.fillStyle = 'rgba(255, 255, 255, 0.7)';
+    ctx.shadowColor = 'rgba(0,0,0,0.1)';
+    ctx.shadowBlur = 40;
+    ctx.beginPath();
+    ctx.roundRect(W * 0.1, y - 100, W * 0.8, TEXT_AREA_HEIGHT - 300, 40);
+    ctx.fill();
+    ctx.restore();
+
+    // 1. Frase de abertura neutra
+    drawText(ctx, 'Você está sendo convidado para a...', cx, y, `62px ${baseFont}`, '#444444');
     y += 180;
 
-    // 2. Placa temática de madeira entalhada (estilo "Fazendinha da", "Aventuras de")
+    // 2. Placa temática neutra e legível
     const themeLabel = project.theme ? `${project.theme} do(a)` : 'A Grande Festa de';
-    drawPlaqueBadge(ctx, themeLabel, cx, y, Math.min(W * 0.65, 1200), 140, '#E4BE88', '#5A381E');
+    drawPlaqueBadge(ctx, themeLabel, cx, y, Math.min(W * 0.65, 1200), 140, '#333333', '#FFFFFF');
     y += 260;
 
-    // 3. Nome da criança em destaque monumental de luxo (lettering 3D com contorno e sombra)
+    // 3. Nome da criança em destaque monumental (lettering bold neutro)
     const nameFontSize = project.name && project.name.length > 10 ? 190 : 230;
     ctx.save();
-    ctx.font = `bold ${nameFontSize}px serif`;
+    ctx.font = `bold ${nameFontSize}px ${baseFont}`;
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
-    ctx.shadowColor = 'rgba(0,0,0,0.22)';
-    ctx.shadowBlur = 24;
-    ctx.shadowOffsetY = 8;
+    
+    // Sombra pesada para descolar do fundo
+    ctx.shadowColor = 'rgba(0,0,0,0.3)';
+    ctx.shadowBlur = 15;
+    ctx.shadowOffsetY = 10;
 
-    // Contorno branco volumoso
-    ctx.lineWidth = 22;
-    ctx.strokeStyle = '#FFFFFF';
-    ctx.strokeText(project.name || '', cx, y);
-
-    // Preenchimento nobre
+    // Preenchimento nobre e escuro
     ctx.fillStyle = c.primary;
     ctx.fillText(project.name || '', cx, y);
     ctx.restore();
@@ -264,16 +283,16 @@ async function renderConvite(project, bgSource, watermark = false) {
 
     // 4. Idade em destaque com ornamentos
     if (project.age) {
-        drawText(ctx, `~   ${project.age.toUpperCase()}   ~`, cx, y, 'bold 84px serif', '#6B4A35');
+        drawText(ctx, `—   ${project.age.toUpperCase()}   —`, cx, y, `bold 74px ${baseFont}`, '#555555');
         y += 150;
     }
 
     // Linha divisória sutil
-    drawDivider(ctx, y, 'rgba(223, 186, 115, 0.45)', W * 0.8, 3);
+    drawDivider(ctx, y, c.divider, W * 0.8, 3);
     y += 120;
 
     // 5. Bloco de informações com ícones ilustrados grandes (Data, Horário, Local)
-    const iconColor = c.accent || '#E87A90';
+    const iconColor = c.accent || '#444444';
     const blockX = cx - 360; // Ponto de início do bloco à esquerda
     const iconSize = 84;
 
@@ -310,7 +329,7 @@ async function renderConvite(project, bgSource, watermark = false) {
         ctx.save();
         ctx.textAlign = 'left';
         ctx.textBaseline = 'middle';
-        ctx.font = '600 64px sans-serif';
+        ctx.font = `600 64px ${baseFont}`;
         ctx.fillStyle = '#423228';
         ctx.fillText(locationShort, blockX + 80, y, W * 0.52);
         ctx.restore();
@@ -329,8 +348,8 @@ async function renderConvite(project, bgSource, watermark = false) {
     ctx.fillRect(cx - 24, footerY - 50, 48, 200);
     ctx.restore();
 
-    // Placa de rodapé
-    drawPlaqueBadge(ctx, `"${footerPhrase}"`, cx, footerY, Math.min(W * 0.72, 1450), 130, '#F2DEC4', '#5E3D24');
+    // Placa de rodapé legível
+    drawPlaqueBadge(ctx, `"${footerPhrase}"`, cx, footerY, Math.min(W * 0.72, 1450), 130, '#FFFFFF', '#333333');
 
 
 
@@ -348,7 +367,7 @@ async function renderConvite(project, bgSource, watermark = false) {
 // ---------------------------------------------------------------------------
 // Renderizador do Lembrete / RSVP
 // ---------------------------------------------------------------------------
-async function renderLembrete(project, bgSource, watermark = false) {
+async function renderLembrete(project, bgSource, watermark = false, aiDna = null) {
     console.log(`[Renderer] Renderizando lembrete para "${project.name}"...`);
 
     const W = A4_WIDTH;
@@ -391,8 +410,20 @@ async function renderLembrete(project, bgSource, watermark = false) {
     let y = 180;
     const cx = W / 2;
 
+    // Determina a família de fonte
+    let baseFont = 'sans-serif';
+    if (aiDna && aiDna.typography) {
+        switch(aiDna.typography.toLowerCase()) {
+            case 'pixel':   baseFont = 'monospace'; break;
+            case 'elegant': baseFont = 'serif'; break;
+            case 'playful': baseFont = 'sans-serif'; break;
+            case 'modern':  baseFont = 'sans-serif'; break;
+            case 'rustic':  baseFont = 'serif'; break;
+        }
+    }
+
     // "LEMBRETE"
-    drawText(ctx, 'LEMBRETE', cx, y, `bold 90px sans-serif`, c.accent);
+    drawText(ctx, 'LEMBRETE', cx, y, `bold 90px ${baseFont}`, c.accent);
     y += 130;
 
     // Linha divisória
@@ -400,18 +431,18 @@ async function renderLembrete(project, bgSource, watermark = false) {
     y += 80;
 
     // Dias em destaque
-    drawText(ctx, diasRestantes, cx, y, `bold 280px serif`, c.primary);
+    drawText(ctx, diasRestantes, cx, y, `bold 280px ${baseFont}`, c.primary);
     y += 160;
 
-    drawText(ctx, 'DIAS', cx, y, `bold 70px sans-serif`, c.accent);
+    drawText(ctx, 'DIAS', cx, y, `bold 70px ${baseFont}`, c.accent);
     y += 110;
 
     // Mensagem
     const msg1 = `Faltam apenas ${diasRestantes} dias para a festa de`;
     const msg2 = `${project.name} e você não pode perder!`;
-    drawText(ctx, msg1, cx, y, `italic 50px serif`, '#777777', W * 0.75);
+    drawText(ctx, msg1, cx, y, `italic 50px ${baseFont}`, '#555555', W * 0.75);
     y += 75;
-    drawText(ctx, msg2, cx, y, `italic 50px serif`, '#777777', W * 0.75);
+    drawText(ctx, msg2, cx, y, `italic 50px ${baseFont}`, '#555555', W * 0.75);
     y += 100;
 
     // Linha
@@ -421,14 +452,14 @@ async function renderLembrete(project, bgSource, watermark = false) {
     // Data e horário
     const dateTime = [project.date, project.time ? `${project.time}h` : ''].filter(Boolean).join('   ·   ');
     if (dateTime.trim()) {
-        drawText(ctx, dateTime, cx, y, `600 54px sans-serif`, c.primary);
+        drawText(ctx, dateTime, cx, y, `600 54px ${baseFont}`, c.primary);
         y += 85;
     }
 
     // Local
     if (project.location) {
         const localShort = project.location.split(',')[0].trim();
-        drawText(ctx, localShort, cx, y, `48px sans-serif`, c.primary, W * 0.78);
+        drawText(ctx, localShort, cx, y, `48px ${baseFont}`, c.primary, W * 0.78);
     }
 
     if (watermark) {
