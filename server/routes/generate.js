@@ -70,7 +70,7 @@ async function checkGenerationLimits(userId, userType, config = {}) {
 // ---------------------------------------------------------------------------
 
 router.post('/', optionalAuth, upload.fields([
-    { name: 'photos', maxCount: 5 },
+    { name: 'photos', maxCount: 1 },
     { name: 'references', maxCount: 5 }
 ]), async (req, res) => {
     const projectData = {

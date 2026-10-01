@@ -1215,12 +1215,12 @@ input:focus, textarea:focus, select:focus {
     letter-spacing: 0.5px;
 }
 
-/* CONVITE RETRATO CANVAS 3:4 aspect ratio */
+/* CONVITE RETRATO: 2:3, mesma proporção da arte gerada pela IA (1024x1536), para não cortar topo/base */
 .invitation-container-mock {
     width: 100%;
     max-width: 400px;
     margin: 0 auto;
-    aspect-ratio: 3/4;
+    aspect-ratio: 2/3;
     position: relative;
     border-radius: var(--border-radius-md);
     overflow: hidden;

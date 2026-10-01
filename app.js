@@ -59,7 +59,8 @@ let selectedRefFiles    = [];
 function handleUserPhotosSelected(event) {
     const files = Array.from(event.target.files);
     if (!files.length) return;
-    selectedPhotosFiles = selectedPhotosFiles.concat(files);
+    selectedPhotosFiles = [files[0]]; // apenas 1 foto: a nova substitui a anterior
+    event.target.value = '';
     renderPhotoPreviews();
 }
 
@@ -74,6 +75,8 @@ function renderPhotoPreviews() {
     const container = document.getElementById('user-photos-thumbs');
     if (!container) return;
     container.querySelectorAll('.thumb-avatar-circle').forEach(el => el.remove());
+    const addBtn = document.getElementById('user-photo-add-btn');
+    if (addBtn) addBtn.style.display = selectedPhotosFiles.length ? 'none' : '';
 
     selectedPhotosFiles.forEach((file, idx) => {
         const url = URL.createObjectURL(file);
@@ -402,19 +405,19 @@ function toggleFormFields() {
         labelName.textContent = "Nome da criança";
         groupAge.style.display = 'block';
         inputAge.setAttribute('required', 'required');
-        labelPhotos.textContent = "Envie 2 fotos da criança";
+        labelPhotos.textContent = "Envie 1 foto da criança";
     } else if (partyType === 'debutante') {
         labelName.textContent = "Nome da Aniversariante";
         groupAge.style.display = 'block';
         inputAge.setAttribute('required', 'required');
-        labelPhotos.textContent = "Envie fotos da Debutante (Opcional)";
+        labelPhotos.textContent = "Envie 1 foto da Debutante (Opcional)";
         inputAge.placeholder = "Ex: 15 anos";
         inputAge.value = "15 anos";
     } else {
         labelName.textContent = "Nome do Aniversariante";
         groupAge.style.display = 'block';
         inputAge.removeAttribute('required');
-        labelPhotos.textContent = "Envie fotos do Aniversariante (Opcional)";
+        labelPhotos.textContent = "Envie 1 foto do Aniversariante (Opcional)";
         inputAge.placeholder = "Ex: 40 anos (Opcional)";
     }
 }

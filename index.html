@@ -391,10 +391,10 @@
                         <div class="form-step" id="form-step-3" style="display: none;">
                             
                             <div class="photos-collage-upload-box">
-                                <label id="label-photos-upload">Envie fotos da criança (para personalização do mascote por visão computacional)</label>
-                                <input type="file" id="userPhotosInput" accept="image/*" multiple style="display:none;" onchange="handleUserPhotosSelected(event)">
+                                <label id="label-photos-upload">Envie 1 foto da criança (para personalização do mascote por visão computacional)</label>
+                                <input type="file" id="userPhotosInput" accept="image/*" style="display:none;" onchange="handleUserPhotosSelected(event)">
                                 <div class="thumbs-collage-row" id="user-photos-thumbs">
-                                    <div class="dashed-plus-upload-btn" onclick="document.getElementById('userPhotosInput').click()">
+                                    <div class="dashed-plus-upload-btn" id="user-photo-add-btn" onclick="document.getElementById('userPhotosInput').click()">
                                         <span>+</span>
                                         <span style="font-size: 0.65rem; display: block;">Enviar Foto</span>
                                     </div>
