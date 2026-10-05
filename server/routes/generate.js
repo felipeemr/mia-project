@@ -13,6 +13,7 @@ const { supabaseAdmin }            = require('../services/supabase');
 const { generateKitImages }        = require('../services/ai');
 const { uploadFromUrl, uploadBuffer } = require('../services/storage');
 const { renderConvite, renderLembrete, createThumbnail } = require('../services/renderer');
+const { buildIdentity } = require('../services/identity');
 const { optionalAuth }             = require('../middleware/auth');
 
 // Multer em memória para upload de fotos do formulário
@@ -205,6 +206,14 @@ router.post('/', optionalAuth, upload.fields([
         console.warn('[Generate] Aviso na renderização:', renderErr.message);
     }
 
+    // --- 4b. Identidade visual (paleta e fontes) derivada da arte do convite: sem custo de IA ---
+    let identity = null;
+    try {
+        identity = await buildIdentity(projectData, bgBuffer, aiDna);
+    } catch (idErr) {
+        console.warn('[Generate] Aviso ao montar identidade visual:', idErr.message);
+    }
+
     // --- 5. Atualizar status do projeto no banco ---
     if (projectId) {
         try {
@@ -246,6 +255,7 @@ router.post('/', optionalAuth, upload.fields([
             // DNA Visual extraído (tipografia, ícones)
             _dna:            aiDna,
         },
+        identity,
         project: {
             ...projectData,
             id: projectId,

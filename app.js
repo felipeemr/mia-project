@@ -143,9 +143,10 @@ async function apiGenerateKit(projectData) {
 }
 
 
-function applyRealAssets(assetsUrls, projectId) {
+function applyRealAssets(assetsUrls, projectId, identity) {
     if (!assetsUrls) return;
     appState.currentProject.assetsUrls = assetsUrls;
+    appState.currentProject.identity = identity || null;
     appState.currentProject.projectId  = projectId;
     saveStateToStorage();
 
@@ -318,6 +319,153 @@ function toggleDevPanel() {
         panel.style.display = 'none';
     } else {
         panel.style.display = 'block';
+    }
+}
+
+// ---------------------------------------------------------------------------
+// Identidade visual da festa (Passo 1): paleta, fontes, logotipo, brasão,
+// monograma e papel digital derivados da arte do convite (sem custo de IA).
+// ---------------------------------------------------------------------------
+function _hexToRgb(hex) {
+    const m = /^#?([0-9a-f]{6})$/i.exec(hex || '');
+    if (!m) return { r: 0, g: 0, b: 0 };
+    const n = parseInt(m[1], 16);
+    return { r: (n >> 16) & 255, g: (n >> 8) & 255, b: n & 255 };
+}
+
+function _luminance(hex) {
+    const { r, g, b } = _hexToRgb(hex);
+    const f = v => { v /= 255; return v <= 0.03928 ? v / 12.92 : Math.pow((v + 0.055) / 1.055, 2.4); };
+    return 0.2126 * f(r) + 0.7152 * f(g) + 0.0722 * f(b);
+}
+
+function _contrast(a, b) {
+    const la = _luminance(a), lb = _luminance(b);
+    return (Math.max(la, lb) + 0.05) / (Math.min(la, lb) + 0.05);
+}
+
+// Entre as cores candidatas, devolve a que mais contrasta com o fundo (mínimo 3:1; senão a escura)
+function _readableColor(candidates, bg, fallback) {
+    const ok = candidates.filter(Boolean).map(c => ({ c, r: _contrast(c, bg) })).sort((x, y) => y.r - x.r)[0];
+    return ok && ok.r >= 3 ? ok.c : fallback;
+}
+
+function _fontStack(f) {
+    if (!f) return 'sans-serif';
+    const generic = { serif: 'serif', display: 'sans-serif', mono: 'monospace', sans: 'sans-serif' }[f.category] || 'sans-serif';
+    return `'${f.family}', ${generic}`;
+}
+
+function applyIdentity(identity) {
+    if (!identity || !Array.isArray(identity.palette) || identity.palette.length < 5) return;
+    const [primary, secondary, accent, light, dark] = identity.palette;
+    const fonts = identity.fonts || {};
+    const mainStack = _fontStack(fonts.main);
+    const compStack = _fontStack(fonts.complementary);
+
+    // 1. Carrega as fontes escolhidas (Google Fonts, licença livre)
+    if (fonts.googleFontsUrl) {
+        let link = document.getElementById('identity-fonts-link');
+        if (!link) {
+            link = document.createElement('link');
+            link.id = 'identity-fonts-link';
+            link.rel = 'stylesheet';
+            document.head.appendChild(link);
+        }
+        if (link.href !== fonts.googleFontsUrl) link.href = fonts.googleFontsUrl;
+    }
+
+    // 2. Paleta (13)
+    const dots = document.querySelectorAll('.color-palette-show .pal-dot');
+    dots.forEach((dot, i) => {
+        if (!identity.palette[i]) return;
+        dot.style.backgroundColor = identity.palette[i];
+        dot.style.border = '1px solid rgba(0,0,0,0.12)';
+        dot.title = identity.palette[i];
+    });
+    const hexRow = document.getElementById('palette-hex-row');
+    if (hexRow) {
+        const names = ['Principal', 'Secundária', 'Destaque', 'Clara', 'Escura'];
+        hexRow.innerHTML = identity.palette.map((hex, i) =>
+            `<span style="display:inline-block; margin:0 6px; font-size:0.65rem; color:var(--gray-muted);"><strong>${names[i]}</strong><br>${hex}</span>`
+        ).join('');
+    }
+
+    // 3. Tipografias (14 e 15)
+    const mainSpec = document.getElementById('font-main-spec');
+    if (mainSpec && fonts.main) {
+        mainSpec.style.fontFamily = mainStack;
+        mainSpec.style.fontWeight = String(fonts.main.weights?.[fonts.main.weights.length - 1] || 700);
+        mainSpec.textContent = `${fonts.main.family} (Aa Bb Cc Dd Ee Ff)`;
+    }
+    const compSpec = document.getElementById('font-comp-spec');
+    if (compSpec && fonts.complementary) {
+        compSpec.style.fontFamily = compStack;
+        compSpec.style.fontWeight = String(fonts.complementary.weights?.[0] || 400);
+        compSpec.textContent = `${fonts.complementary.family} (Aa Bb Cc Dd Ee Ff)`;
+    }
+    const catLabel = { serif: 'serifada', sans: 'sem serifa', display: 'de destaque (display)', mono: 'monoespaçada' };
+    const mainDesc = document.getElementById('font-main-desc');
+    if (mainDesc && fonts.main) mainDesc.textContent = `Fonte ${catLabel[fonts.main.category] || ''} sugerida para títulos e nomes (Google Fonts, uso livre).`;
+    const compDesc = document.getElementById('font-comp-desc');
+    if (compDesc && fonts.complementary) compDesc.textContent = `Fonte ${catLabel[fonts.complementary.category] || ''} sugerida para leitura rápida de dados básicos (Google Fonts, uso livre).`;
+
+    // 4. Logotipo (10)
+    const logoBox = document.querySelector('#logo-brand-box .logo-flex-item');
+    const logoName = document.getElementById('logo-val-name');
+    const logoSub = document.getElementById('logo-val-theme');
+    if (logoBox) logoBox.style.background = `linear-gradient(135deg, ${light} 0%, ${primary}33 100%)`;
+    if (logoName) {
+        logoName.style.fontFamily = mainStack;
+        logoName.style.color = _readableColor([primary, secondary, accent, dark], light, dark);
+    }
+    if (logoSub) {
+        logoSub.style.fontFamily = compStack;
+        logoSub.style.color = _readableColor([accent, secondary, primary, dark], light, dark);
+    }
+
+    // 5. Brasão (11)
+    const crest = document.getElementById('crest-box');
+    if (crest) {
+        const paths = crest.querySelectorAll('path');
+        if (paths[0]) paths[0].setAttribute('stroke', primary);
+        if (paths[1]) paths[1].setAttribute('fill', accent);
+        const crestInitial = document.getElementById('brand-val-initial-crest');
+        const crestYear = document.getElementById('brand-val-year');
+        if (crestInitial) {
+            crestInitial.setAttribute('fill', _readableColor([dark, primary], '#FFFFFF', dark));
+            crestInitial.setAttribute('font-family', mainStack);
+        }
+        if (crestYear) {
+            crestYear.setAttribute('fill', _readableColor([accent, secondary, primary], '#FFFFFF', dark));
+            crestYear.setAttribute('font-family', compStack);
+        }
+    }
+
+    // 6. Monograma (12)
+    const mono = document.getElementById('mono-box');
+    if (mono) {
+        const circles = mono.querySelectorAll('circle');
+        if (circles[0]) circles[0].setAttribute('stroke', accent);
+        if (circles[1]) circles[1].setAttribute('stroke', primary);
+        const monoInitial = document.getElementById('brand-val-initial');
+        if (monoInitial) {
+            monoInitial.setAttribute('fill', _readableColor([dark, primary], '#FFFFFF', dark));
+            monoInitial.setAttribute('font-family', mainStack);
+        }
+        const monoLabel = mono.querySelector('text:not(#brand-val-initial)');
+        if (monoLabel) {
+            monoLabel.setAttribute('fill', _readableColor([primary, accent, secondary], '#FFFFFF', dark));
+            monoLabel.setAttribute('font-family', compStack);
+        }
+    }
+
+    // 7. Papel digital (09): estampa com as cores da paleta
+    const pattern = document.getElementById('paper-pattern-element');
+    if (pattern) {
+        pattern.style.backgroundColor = light;
+        pattern.style.backgroundImage =
+            `radial-gradient(${accent} 15%, transparent 16%), radial-gradient(${primary} 10%, transparent 11%)`;
     }
 }
 
@@ -654,7 +802,7 @@ function startLoadingProgressAnimation() {
 
             // Aplica as imagens reais da IA (se disponíveis)
             if (apiResult?.assetsUrls) {
-                applyRealAssets(apiResult.assetsUrls, apiResult.projectId);
+                applyRealAssets(apiResult.assetsUrls, apiResult.projectId, apiResult.identity);
             }
             
             // Processa DNA da IA (Fontes e Ícones) da Fase 6
@@ -752,6 +900,8 @@ function populateResultScreen() {
         patternElem.style.backgroundImage = `radial-gradient(#3A7D7A 8%, transparent 9%), radial-gradient(#3A7D7A 8%, transparent 9%)`;
     }
     
+    if (p.identity) applyIdentity(p.identity);
+
     updateWatermarkVisibility();
     document.getElementById('checkout-val-theme').textContent = `Tema: ${p.theme} - ${p.name}`;
     

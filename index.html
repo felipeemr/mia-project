@@ -739,7 +739,7 @@
                         <!-- 13. PALETA DE CORES -->
                         <div class="preview-card-wrapper">
                             <div class="prominent-highlight-badge">13. Paleta de Cores Recomendada</div>
-                            <p style="font-size:0.75rem; color:var(--gray-muted); margin-bottom:12px;">Amostragem dos códigos hexadecimais de cor gerados pela IA.</p>
+                            <p style="font-size:0.75rem; color:var(--gray-muted); margin-bottom:12px;">Cores extraídas da arte do seu convite, com o código hexadecimal de cada uma.</p>
                             
                             <div class="color-palette-show" style="justify-content: center;">
                                 <span class="pal-dot" style="background-color: #69D7D1;" title="#69D7D1"></span>
@@ -748,14 +748,15 @@
                                 <span class="pal-dot" style="background-color: #FBE1EC;" title="#FBE1EC"></span>
                                 <span class="pal-dot" style="background-color: #FFFFFF; border: 1px solid #ddd;" title="#FFFFFF"></span>
                             </div>
+                            <div id="palette-hex-row" style="text-align:center; margin-top:6px;"></div>
                         </div>
 
                         <!-- 14. TIPOGRAFIA PRINCIPAL -->
                         <div class="preview-card-wrapper">
                             <div class="prominent-highlight-badge">14. Tipografia Principal</div>
-                            <p style="font-size:0.75rem; color:var(--gray-muted); margin-bottom:12px;">A fonte serifada sugerida para os textos elegantes do tema.</p>
+                            <p id="font-main-desc" style="font-size:0.75rem; color:var(--gray-muted); margin-bottom:12px;">A fonte serifada sugerida para os textos elegantes do tema.</p>
                             
-                            <div class="font-spec" style="font-size:1.15rem; font-family:'Playfair Display', serif; font-weight:700; text-align:center; padding: 14px; background:var(--gray-light); border-radius:10px;">
+                            <div class="font-spec" id="font-main-spec" style="font-size:1.15rem; font-family:'Playfair Display', serif; font-weight:700; text-align:center; padding: 14px; background:var(--gray-light); border-radius:10px;">
                                 Playfair Display (Aa Bb Cc Dd Ee Ff)
                             </div>
                         </div>
@@ -763,9 +764,9 @@
                         <!-- 15. TIPOGRAFIA COMPLEMENTAR -->
                         <div class="preview-card-wrapper">
                             <div class="prominent-highlight-badge">15. Tipografia Complementar</div>
-                            <p style="font-size:0.75rem; color:var(--gray-muted); margin-bottom:12px;">A fonte sem serifa sugerida para leitura rápida de dados básicos.</p>
+                            <p id="font-comp-desc" style="font-size:0.75rem; color:var(--gray-muted); margin-bottom:12px;">A fonte sem serifa sugerida para leitura rápida de dados básicos.</p>
                             
-                            <div class="font-spec" style="font-size:1.15rem; font-family:'Poppins', sans-serif; font-weight:500; text-align:center; padding: 14px; background:var(--gray-light); border-radius:10px;">
+                            <div class="font-spec" id="font-comp-spec" style="font-size:1.15rem; font-family:'Poppins', sans-serif; font-weight:500; text-align:center; padding: 14px; background:var(--gray-light); border-radius:10px;">
                                 Poppins (Aa Bb Cc Dd Ee Ff)
                             </div>
                         </div>
