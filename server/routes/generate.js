@@ -129,7 +129,7 @@ router.post('/', optionalAuth, upload.fields([
     const bgDefault = DEFAULT_BG[projectData.type];
 
     try {
-        const aiAvailable = !!(process.env.REPLICATE_API_TOKEN || process.env.OPENAI_API_KEY);
+        const aiAvailable = !!process.env.OPENAI_API_KEY;
 
         if (aiAvailable) {
             console.log('[Generate] Chamando API de IA para geração das imagens...');

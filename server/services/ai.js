@@ -1,7 +1,6 @@
 /* =============================================================================
    MERAKI — Serviço de IA para Geração de Imagens
-   Suporta Replicate (Flux.1) e OpenAI (DALL-E 3)
-   O provider é detectado automaticamente pelas variáveis de ambiente.
+   Provedor único: OpenAI (imagens via gpt-image / chatgpt-image-latest, visão via GPT-4o).
 
    AJUSTE DE SANITIZAÇÃO DE COPYRIGHT (vs. versão anterior):
    - Antes: sanitizePromptForDalle() só rodava no prompt do DALL-E, e sobre o
@@ -18,7 +17,6 @@
      só uma lista fixa de exemplos).
    ============================================================================= */
 
-const Replicate = require('replicate');
 const OpenAI = require('openai');
 const axios = require('axios');
 const sharp = require('sharp');
@@ -82,49 +80,6 @@ function getPromptsForProject(projectData, childFeatures = null, inspirationDna 
 
 
 // ---------------------------------------------------------------------------
-// Provider: Replicate (Flux.1)
-// ---------------------------------------------------------------------------
-async function generateWithReplicate(prompt, options = {}) {
-    const replicate = new Replicate({ auth: process.env.REPLICATE_API_TOKEN });
-
-    // Para Image-to-Image nativo de qualidade superior, usamos o SDXL padrão da Stability AI (com a hash de versão para evitar erro 404)
-    const model = options.model || 'stability-ai/sdxl:39ed52f2a78e934b3ba6e2a89f5b1c712de7dfea535525255b1aa35c5565e08b';
-
-    const input = {
-        prompt,
-        width: options.width || 1024,
-        height: options.height || 1024,
-        num_outputs: 1,
-        disable_safety_checker: true,
-        ...options.replicateInput,
-    };
-
-    // Mágica do Estilo Canva (Image-to-Image / IP-Adapter)
-    if (options.referenceImageBase64) {
-        input.image = `data:image/jpeg;base64,${options.referenceImageBase64}`;
-        input.prompt_strength = 0.85; // 85% de liberdade para o prompt, 15% de trava estrutural exata da imagem base
-        console.log(`[AI/Replicate] 🪄 Injetando imagem de referência (Image-to-Image ativado)`);
-    }
-
-    console.log(`[AI/Replicate] Gerando com modelo ${model}...`);
-    try {
-        const output = await replicate.run(model, { input });
-        const urls = Array.isArray(output) ? output : [output];
-        return urls[0];
-    } catch (err) {
-        if (err.message.includes('NSFW') && options.referenceImageBase64) {
-            console.warn(`[AI/Replicate] NSFW detectado. Tentando gerar sem a imagem de referência...`);
-            delete input.image;
-            delete input.prompt_strength;
-            const fallbackOutput = await replicate.run(model, { input });
-            const urls = Array.isArray(fallbackOutput) ? fallbackOutput : [fallbackOutput];
-            return urls[0];
-        }
-        throw err;
-    }
-}
-
-// ---------------------------------------------------------------------------
 // Provider: OpenAI (gpt-image-1 / DALL-E)
 // ---------------------------------------------------------------------------
 async function generateWithOpenAI(prompt, options = {}) {
@@ -173,16 +128,13 @@ async function generateWithOpenAI(prompt, options = {}) {
 
 
 // ---------------------------------------------------------------------------
-// Função pública: detecta provider e gera 1 imagem
+// Função pública: gera 1 imagem (OpenAI)
 // ---------------------------------------------------------------------------
 async function generateImage(prompt, options = {}) {
-    if (process.env.REPLICATE_API_TOKEN) {
-        return generateWithReplicate(prompt, options);
+    if (!process.env.OPENAI_API_KEY) {
+        throw new Error('Nenhuma API de IA configurada. Defina OPENAI_API_KEY no .env');
     }
-    if (process.env.OPENAI_API_KEY) {
-        return generateWithOpenAI(prompt, options);
-    }
-    throw new Error('Nenhuma API de IA configurada. Defina REPLICATE_API_TOKEN ou OPENAI_API_KEY no .env');
+    return generateWithOpenAI(prompt, options);
 }
 
 // ---------------------------------------------------------------------------
@@ -625,49 +577,49 @@ ${prompt}`);
        o `theme` sanitizado (activeThemeLabel) — ver chamada de getPromptsForProject()
        logo acima. Não é necessário sanitizar de novo.
 
-    console.log(`[AI/Replicate] Pausa de 12s para esfriar o Rate Limit...`);
+    console.log(`[AI/OpenAI] Pausa de 12s para esfriar o Rate Limit...`);
     await delay(12000);
     
-    console.log(`[AI/Replicate] Gerando 2/5: Mascote...`);
+    console.log(`[AI/OpenAI] Gerando 2/5: Mascote...`);
     const mascoteRef = childB64 || refB64; // Usa a foto da criança para cartonizar, se houver
     let mascoteUrl = null;
     try {
         mascoteUrl = await generateImage(prompts.mascote, { width: 1024, height: 1024, referenceImageBase64: mascoteRef });
     } catch (e) {
-        console.warn(`[AI/Replicate] Falha no Mascote:`, e.message);
+        console.warn(`[AI/OpenAI] Falha no Mascote:`, e.message);
     }
     
-    console.log(`[AI/Replicate] Pausa de 12s para esfriar o Rate Limit...`);
+    console.log(`[AI/OpenAI] Pausa de 12s para esfriar o Rate Limit...`);
     await delay(12000);
 
-    console.log(`[AI/Replicate] Gerando 3/5: Elementos...`);
+    console.log(`[AI/OpenAI] Gerando 3/5: Elementos...`);
     let elementosUrl = null;
     try {
         elementosUrl = await generateImage(prompts.elementos, { width: 1024, height: 1024 });
     } catch (e) {
-        console.warn(`[AI/Replicate] Falha nos Elementos:`, e.message);
+        console.warn(`[AI/OpenAI] Falha nos Elementos:`, e.message);
     }
     
-    console.log(`[AI/Replicate] Pausa de 12s para esfriar o Rate Limit...`);
+    console.log(`[AI/OpenAI] Pausa de 12s para esfriar o Rate Limit...`);
     await delay(12000);
 
-    console.log(`[AI/Replicate] Gerando 4/5: Fundo...`);
+    console.log(`[AI/OpenAI] Gerando 4/5: Fundo...`);
     let fundoUrl = null;
     try {
         fundoUrl = await generateImage(prompts.fundo, { width: 1024, height: 1024 });
     } catch (e) {
-        console.warn(`[AI/Replicate] Falha no Fundo:`, e.message);
+        console.warn(`[AI/OpenAI] Falha no Fundo:`, e.message);
     }
     
-    console.log(`[AI/Replicate] Pausa de 12s para esfriar o Rate Limit...`);
+    console.log(`[AI/OpenAI] Pausa de 12s para esfriar o Rate Limit...`);
     await delay(12000);
 
-    console.log(`[AI/Replicate] Gerando 5/5: Papel Digital...`);
+    console.log(`[AI/OpenAI] Gerando 5/5: Papel Digital...`);
     let papelUrl = null;
     try {
         papelUrl = await generateImage(prompts.papel, { width: 1024, height: 1024 });
     } catch (e) {
-        console.warn(`[AI/Replicate] Falha no Papel Digital:`, e.message);
+        console.warn(`[AI/OpenAI] Falha no Papel Digital:`, e.message);
     }
 
     // --- FASE EXTRA: LEMBRETE INTEGRADO VIA GPT-IMAGE ---

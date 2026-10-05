@@ -19,7 +19,6 @@
     "multer": "^1.4.5-lts.1",
     "openai": "^4.24.0",
     "pdfkit": "^0.14.0",
-    "replicate": "^0.25.2",
     "sharp": "^0.33.2"
   },
   "devDependencies": {

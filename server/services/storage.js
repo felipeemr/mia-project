@@ -48,7 +48,7 @@ async function uploadBuffer(buffer, filePath, mimeType = 'image/png') {
 
 /**
  * Faz download de uma URL remota ou data URI e armazena no Supabase Storage.
- * Útil para salvar imagens geradas por APIs de IA (Replicate/OpenAI).
+ * Útil para salvar imagens geradas por API de IA (OpenAI).
  * @param {string} url - URL pública ou Data URI da imagem gerada pela IA
  * @param {string} filePath - Caminho destino no bucket
  * @returns {Promise<string>} URL pública permanente no Supabase

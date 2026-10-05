@@ -90,7 +90,6 @@ app.listen(PORT, async () => {
     console.log(`✅ Servidor rodando em: http://localhost:${PORT}`);
     console.log(`📁 Frontend servido de: ${frontendPath}`);
     console.log(`🔑 Supabase: ${process.env.SUPABASE_URL ? 'Configurado' : '⚠️  NÃO configurado'}`);
-    console.log(`🤖 IA (Replicate): ${process.env.REPLICATE_API_TOKEN ? 'Configurado' : '⚠️  NÃO configurado'}`);
     console.log(`🤖 IA (OpenAI): ${process.env.OPENAI_API_KEY ? 'Configurado' : 'Não configurado'}`);
 
     if (process.env.SUPABASE_URL) {
