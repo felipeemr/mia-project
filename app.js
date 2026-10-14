@@ -150,28 +150,18 @@ function applyRealAssets(assetsUrls, projectId, identity, phrase, kit) {
     appState.currentProject.kit = kit || null;
     if (phrase) appState.currentProject.phrase = phrase;
     appState.currentProject.projectId  = projectId;
+    // Profissionais: guarda o projeto gerado para reabrir depois pela lista de projetos
+    const entry = appState.projectsDb.find(x => x.id === appState.currentProject.id);
+    if (entry) {
+        const { photos, references, ...rest } = appState.currentProject;
+        entry.snapshot = { ...rest, dateObj: rest.dateObj ? new Date(rest.dateObj).toISOString() : null };
+    }
     saveStateToStorage();
 
     populateResultScreen();
     console.log('[API] ✅ Assets reais aplicados na interface.');
-    applyRealDownloadLinks(projectId);
 }
 
-
-function applyRealDownloadLinks(projectId) {
-    if (!projectId) return;
-    const base = `${API_BASE}/downloads/${projectId}`;
-    const setHref = (id, url) => {
-        const el = document.getElementById(id);
-        if (el) { el.href = url; el.removeAttribute('onclick'); el.target = '_blank'; }
-    };
-    setHref('btn-download-png', `${base}/convite.png`);
-    setHref('btn-download-pdf', `${base}/convite.pdf`);
-    setHref('btn-download-zip', `${base}/kit.zip`);
-    setHref('btn-dl-png',       `${base}/convite.png`);
-    setHref('btn-dl-pdf',       `${base}/convite.pdf`);
-    setHref('btn-dl-zip',       `${base}/kit.zip`);
-}
 
 /* ========================================================================== */
 
@@ -190,34 +180,13 @@ let appState = {
         type: 'client', // 'client' or 'pro'
         name: 'Cliente',
         clientGenerationsCount: 0,
-        proDailyCount: 2,
-        proMonthlyCount: 18
+        proDailyCount: 0,
+        proMonthlyCount: 0
     },
 
-    currentProject: {
-        id: 101,
-        type: 'infantil',
-        name: 'Helena',
-        age: '5 anos',
-        date: '12/10/2026',
-        time: '15:30',
-        location: 'Buffet Jardim Secreto, Av. das Américas, 500',
-        phrase: 'Venha viver essa aventura no meu Jardim Encantado!',
-        theme: 'Jardim Encantado',
-        notes: 'Quero tons pastel e bichinhos da floresta.',
-        photos: [],
-        references: [],
-        watermarked: true,
-        bgTemplate: 'assets/infantil_bg.jpg',
-        initialLetter: 'H',
-        dateObj: new Date(2026, 9, 12)
-    },
+    currentProject: {},
 
-    projectsDb: [
-        { id: 101, name: 'Helena', type: 'infantil', theme: 'Jardim Encantado', status: 'Finalizado', date: '12/10/2026' },
-        { id: 102, name: 'Laura', type: 'debutante', theme: 'Princesa Boho', status: 'Em criação', date: '26/08/2026' },
-        { id: 103, name: 'Mariana', type: 'adulto', theme: 'Floral Delicado', status: 'Finalizado', date: '24/08/2026' }
-    ]
+    projectsDb: []
 };
 
 // 2. APP INITIALIZATION
@@ -239,8 +208,11 @@ document.addEventListener('DOMContentLoaded', () => {
     // Hook up form step toggles
     toggleFormFields();
     
-    // Populate results initially with Helena prefill
-    populateResultScreen();
+    // Painel de testes só aparece com ?dev=1 na URL
+    if (new URLSearchParams(location.search).get('dev') === '1') {
+        const fab = document.getElementById('devFabToggle');
+        if (fab) fab.style.display = '';
+    }
 });
 
 // Save and Load State
@@ -252,14 +224,14 @@ function saveStateToStorage() {
             if (typeof v === 'string' && v.startsWith('data:') && v.length > 2000) return undefined;
             return v;
         });
-        localStorage.setItem('meraki_state_collage_v3', json);
+        localStorage.setItem('meraki_state_collage_v4', json);
     } catch (e) {
         console.warn('Não foi possível salvar o estado local:', e.message);
     }
 }
 
 function loadStateFromStorage() {
-    const saved = localStorage.getItem('meraki_state_collage_v3');
+    const saved = localStorage.getItem('meraki_state_collage_v4');
     if (saved) {
         try {
             const parsed = JSON.parse(saved);
@@ -277,6 +249,7 @@ function showView(viewId) {
     const views = document.querySelectorAll('.view-page-item');
     views.forEach(v => v.classList.remove('active'));
     
+    if (viewId === 'download') renderDownloads();
     const targetView = document.getElementById(`view-${viewId}`);
     if (targetView) {
         targetView.classList.add('active');
@@ -387,7 +360,11 @@ function applyIdentity(identity) {
         if (link.href !== fonts.googleFontsUrl) link.href = fonts.googleFontsUrl;
     }
 
-    // 2. Paleta (13)
+    // 2. Paleta (12)
+    const palBox = document.querySelector('.color-palette-show');
+    if (palBox && palBox.children.length < identity.palette.length) {
+        palBox.innerHTML = identity.palette.map(() => '<span class="pal-dot"></span>').join('');
+    }
     const dots = document.querySelectorAll('.color-palette-show .pal-dot');
     dots.forEach((dot, i) => {
         if (!identity.palette[i]) return;
@@ -518,21 +495,10 @@ function applyKitExtras(kit, assetsUrls) {
     };
     showBrandImage('crest-box', assetsUrls && assetsUrls.brasao, 'Brasão da aniversariante');
 
-    // Logotipo: imagem com as mesmas letras do título do convite (substitui o nome em fonte do navegador)
+    // Logotipo: imagem com as mesmas letras do título do convite
     const logo = assetsUrls && assetsUrls.logo;
-    const logoName = document.getElementById('logo-val-name');
-    if (logo && logoName) {
-        logoName.style.display = 'none';
-        let img = document.getElementById('logo-val-img');
-        if (!img) {
-            img = document.createElement('img');
-            img.id = 'logo-val-img';
-            img.alt = 'Logotipo da festa';
-            img.style.cssText = 'max-width:100%; max-height:140px; object-fit:contain; position:relative; z-index:1;';
-            logoName.parentNode.insertBefore(img, logoName);
-        }
-        img.src = logo;
-    }
+    const logoImg = document.getElementById('logo-val-img');
+    if (logo && logoImg) logoImg.src = logo;
 
     // Papel digital: usa a estampa gerada com os elementos do tema
     const papel = assetsUrls && assetsUrls.papel;
@@ -579,13 +545,26 @@ function applyAiDna(dna) {
 let currentFormStep = 1;
 function nextStep(stepNum) {
     if (stepNum === 3) {
-        const name = document.getElementById('partyName');
-        const date = document.getElementById('partyDate');
-        const time = document.getElementById('partyTime');
-        const location = document.getElementById('partyLocation');
-        
-        if (!name.value || !date.value || !time.value || !location.value) {
-            alert("Por favor, preencha todos os campos obrigatórios da festa!");
+        const checks = [
+            ['partyName', 'o nome'],
+            ['partyAge', 'a idade'],
+            ['partyDate', 'a data da festa'],
+            ['partyTheme', 'o tema ou estilo'],
+            ['partyTime', 'o horário'],
+            ['partyLocation', 'o local / endereço'],
+        ];
+        for (const [id, label] of checks) {
+            const el = document.getElementById(id);
+            if (!el || !String(el.value || '').trim()) {
+                alert(`Por favor, preencha ${label}.`);
+                if (el) el.focus();
+                return;
+            }
+        }
+        const typeEl = document.querySelector('input[name="partyType"]:checked');
+        const genderEl = document.querySelector('input[name="partyGender"]:checked');
+        if (typeEl && typeEl.value !== 'debutante' && !genderEl) {
+            alert('Por favor, informe se é menino ou menina.');
             return;
         }
     }
@@ -637,89 +616,29 @@ function toggleFormFields() {
         labelName.textContent = "Nome da criança";
         groupAge.style.display = 'block';
         inputAge.setAttribute('required', 'required');
-        labelPhotos.textContent = "Envie 1 foto da criança";
+        inputAge.placeholder = "Ex.: 10 anos";
+        labelPhotos.textContent = "Envie 1 foto da criança (obrigatória)";
     } else if (partyType === 'debutante') {
         labelName.textContent = "Nome da Aniversariante";
         groupAge.style.display = 'block';
         inputAge.setAttribute('required', 'required');
-        labelPhotos.textContent = "Envie 1 foto da Debutante (Opcional)";
-        inputAge.placeholder = "Ex: 15 anos";
-        inputAge.value = "15 anos";
+        labelPhotos.textContent = "Envie 1 foto da aniversariante (obrigatória)";
+        inputAge.placeholder = "Ex.: 15 anos";
     } else {
         labelName.textContent = "Nome do Aniversariante";
         groupAge.style.display = 'block';
-        inputAge.removeAttribute('required');
-        labelPhotos.textContent = "Envie 1 foto do Aniversariante (Opcional)";
-        inputAge.placeholder = "Ex: 40 anos (Opcional)";
+        inputAge.setAttribute('required', 'required');
+        labelPhotos.textContent = "Envie 1 foto do aniversariante (obrigatória)";
+        inputAge.placeholder = "Ex.: 40 anos";
     }
 }
 
-// 7. PREFILL SIMULATION SHORTCUTS
-function prefillAndGenerate(type) {
+// 7. ESCOLHA DO TIPO DE FESTA (miniaturas da página inicial): só seleciona o tipo e abre o formulário vazio
+function selectPartyType(type) {
     showView('generator');
-    nextStep(1);
-    
-    document.querySelectorAll('input[name="partyType"]').forEach(radio => {
-        if (radio.value === type) {
-            radio.checked = true;
-        } else {
-            radio.checked = false;
-        }
-    });
-    
+    document.querySelectorAll('input[name="partyType"]').forEach(radio => { radio.checked = (radio.value === type); });
     toggleFormFields();
-    
-    const formFields = {
-        infantil: {
-            name: 'Helena',
-            age: '5 anos',
-            date: '2026-10-12',
-            time: '15:30',
-            location: 'Buffet Jardim Secreto, Av. das Américas, 500',
-            phrase: 'Venha viver essa aventura no meu Jardim Encantado!',
-            theme: 'Jardim Encantado',
-            notes: 'Quero animais da floresta delicados, muitas flores em tom pastel de rosa e turquesa.'
-        },
-        debutante: {
-            name: 'Giovanna',
-            age: '15 anos',
-            date: '2026-11-20',
-            time: '21:00',
-            location: 'Espaço Elegance, Rua Oscar Freire, 1024',
-            phrase: 'Estou pronta para debutar e celebrar com as pessoas que mais amo!',
-            theme: 'Princesa Realeza',
-            notes: 'Quero algo bem delicado em rosa e dourado, com coroa sutil.'
-        },
-        adulto: {
-            name: 'Carolina',
-            age: '40 anos',
-            date: '2026-09-05',
-            time: '19:30',
-            location: 'Bistrô das Oliveiras, Alameda Lorena, 88',
-            phrase: 'Quero brindar à vida cercada de amigos!',
-            theme: 'Floral Delicado',
-            notes: 'Eucalipto, galhos secos, aquarela minimalista em tons verdes, ouro e off-white.'
-        }
-    };
-    
-    const data = formFields[type];
-    
-    document.getElementById('partyName').value = data.name;
-    const presetGender = document.querySelector(`input[name="partyGender"][value="${data.gender || 'f'}"]`);
-    if (presetGender) presetGender.checked = true;
-    document.getElementById('partyAge').value = data.age;
-    document.getElementById('partyDate').value = data.date;
-    document.getElementById('partyTime').value = data.time;
-    document.getElementById('partyLocation').value = data.location;
-    document.getElementById('partyTheme').value = data.theme;
-    document.getElementById('partyNotes').value = data.notes;
-    
     nextStep(2);
-    nextStep(3);
-    
-    const submitBtn = document.getElementById('btn-submit-generator');
-    submitBtn.classList.add('animate-pulse');
-    setTimeout(() => submitBtn.classList.remove('animate-pulse'), 3000);
 }
 
 // 8. SIMULATOR GENERATION RUNNER
@@ -729,20 +648,31 @@ function handleGeneratorSubmit(event) {
     const partyType = document.querySelector('input[name="partyType"]:checked').value;
     const name = document.getElementById('partyName').value;
     const age = document.getElementById('partyAge').value;
-    const gender = (document.querySelector('input[name="partyGender"]:checked') || {}).value || 'f';
+    const gender = (document.querySelector('input[name="partyGender"]:checked') || {}).value || (partyType === 'debutante' ? 'f' : '');
     const dateStr = document.getElementById('partyDate').value;
     const time = document.getElementById('partyTime').value;
     const location = document.getElementById('partyLocation').value;
     const theme = document.getElementById('partyTheme').value;
     const notes = document.getElementById('partyNotes').value;
-    
-    let formattedDate = 'Data Indefinida';
-    let dateObj = new Date();
-    if (dateStr) {
-        const parts = dateStr.split('-');
-        formattedDate = `${parts[2]}/${parts[1]}/${parts[0]}`;
-        dateObj = new Date(parts[0], parts[1]-1, parts[2]);
+
+    // Tudo é obrigatório (a foto também); nada é preenchido por conta própria
+    const faltando = [];
+    if (!name.trim()) faltando.push('nome');
+    if (!age.trim()) faltando.push('idade');
+    if (!gender) faltando.push('menino ou menina');
+    if (!dateStr) faltando.push('data da festa');
+    if (!theme.trim()) faltando.push('tema');
+    if (!time) faltando.push('horário');
+    if (!location.trim()) faltando.push('local');
+    if (!selectedPhotosFiles.length) faltando.push('foto da criança');
+    if (faltando.length) {
+        alert('Por favor, preencha: ' + faltando.join(', ') + '.');
+        return;
     }
+
+    const dateParts = dateStr.split('-');
+    const formattedDate = `${dateParts[2]}/${dateParts[1]}/${dateParts[0]}`;
+    const dateObj = new Date(dateParts[0], dateParts[1] - 1, dateParts[2]);
     
     // Check Client Limits
     if (appState.currentUser.type === 'client' && !appState.config.infiniteLimit) {
@@ -776,7 +706,6 @@ function handleGeneratorSubmit(event) {
         notes: notes,
         watermarked: appState.currentUser.type === 'client' && !appState.config.bypassPayment,
         initialLetter: name.charAt(0).toUpperCase(),
-        bgTemplate: getBgTemplatePath(partyType),
         dateObj: dateObj
     };
     
@@ -801,18 +730,6 @@ function handleGeneratorSubmit(event) {
     
     showView('generating');
     startLoadingProgressAnimation();
-}
-
-function getDefaultPhrase(type, name) {
-    if (type === 'infantil') return 'Com grande alegria convido você para soprar as velinhas comigo!';
-    if (type === 'debutante') return 'Um dia inesquecível para celebrar o início de uma linda jornada.';
-    return 'Celebrar a vida é mais especial com a presença de amigos queridos!';
-}
-
-function getBgTemplatePath(type) {
-    if (type === 'infantil') return 'assets/infantil_bg.jpg';
-    if (type === 'debutante') return 'assets/debutante_bg.jpg';
-    return 'assets/adulto_bg.jpg';
 }
 
 function startLoadingProgressAnimation() {
@@ -889,8 +806,6 @@ function startLoadingProgressAnimation() {
                 applyRealAssets(apiResult.assetsUrls, apiResult.projectId, apiResult.identity, apiResult.project?.phrase, apiResult.kit);
                 // Processa DNA da IA (Fontes e Ícones) da Fase 6
                 if (apiResult.assetsUrls._dna) applyAiDna(apiResult.assetsUrls._dna);
-            } else {
-                populateResultScreen(); // modo sem backend: usa as artes de exemplo
             }
             showView('result');
         }
@@ -913,100 +828,93 @@ function setResultImg(el, url) {
     el.src = url;
 }
 
-// 9. DYNAMIC DATA BINDINGS & RENDERING
-function populateResultScreen() {
-    const p = appState.currentProject;
-    
-    // 1. Invitation overlay texts
-    // Dados reais (gerados pela IA) => só imagens geradas. Sem backend (modo de exemplo) => artes de exemplo.
-    const isReal = !!(p.assetsUrls && (p.assetsUrls.background || p.assetsUrls.convitePreview));
-    const bgUrl = p.assetsUrls?.convitePreview || p.assetsUrls?.background || (isReal ? null : p.bgTemplate);
-    setResultImg(document.getElementById('invite-bg-image'), bgUrl);
-    
-    // 2. RSVP/Reminder overlay texts
-    
-    // Set reminder background image to match the invitation background
-    const reminderBg = document.getElementById('reminder-bg-image');
-    const hasGenReminder = !!(p.assetsUrls && p.assetsUrls.lembretePreview);
-    setResultImg(reminderBg, hasGenReminder ? p.assetsUrls.lembretePreview : (p.assetsUrls?.background || (isReal ? null : p.bgTemplate)));
-    // O lembrete gerado pela IA já traz todos os textos dentro da arte (nada é sobreposto)
-    
+// Mostra ou esconde um cartão da galeria
+function setCardVisible(id, visible) {
+    const el = document.getElementById(id);
+    if (el) el.style.display = visible ? '' : 'none';
+}
 
-    // 3. Mascote official
-    document.getElementById('mascot-val-title').textContent = `Mascote de ${p.name}`;
-    const mascotImg = document.getElementById('mascot-img-render');
-    if (mascotImg) {
-        if (p.assetsUrls?.mascote) {
-            setResultImg(mascotImg, p.assetsUrls.mascote);
-        } else if (isReal) {
-            setResultImg(mascotImg, null); // gerado de verdade, mas este item não saiu: não mostra a arte de exemplo
-        } else {
-            setResultImg(mascotImg, p.type === 'debutante' ? 'assets/girl_2.jpg' : 'assets/girl_1.jpg');
-        }
-    }
-
-    // 4. Logo card sync
-    document.getElementById('logo-val-name').textContent = p.name;
-    document.getElementById('logo-val-theme').textContent = p.theme.toUpperCase();
-
-    // 5. Custom Background render
-    const bgRender = document.getElementById('custom-bg-render');
-    // Lembrancinha (fundo limpo quadrado + logotipo + agradecimento): o cartão só aparece se foi gerada
-    const favorUrl = p.assetsUrls && p.assetsUrls.lembrancinha;
-    const favorCard = document.getElementById('lembrancinha-card');
-    if (favorCard) favorCard.style.display = favorUrl ? '' : 'none';
-    setResultImg(document.getElementById('lembrancinha-img'), favorUrl || null);
-
-    // Fundo limpo: nunca mostra o convite (que tem texto) no lugar do fundo
-    setResultImg(bgRender, p.assetsUrls?.fundo || (isReal ? null : p.bgTemplate));
-
-    // 6. Elementos sheet & Papel digital
-    const elemImg = document.querySelector('.elements-sheet-img');
-    setResultImg(elemImg, p.assetsUrls?.elementos || (isReal ? null : 'assets/elementos_sheet.jpg'));
-
-    const papelImg = document.querySelector('.digital-paper-img');
-    if (papelImg && p.assetsUrls?.papel) papelImg.src = p.assetsUrls.papel;
-
-
-    // 6. Monograms & Crest letter SVGs
-    document.getElementById('brand-val-initial-crest').textContent = p.initialLetter;
-    document.getElementById('brand-val-year').textContent = p.dateObj.getFullYear();
-    
-    // 7. Palette colors
-    const colorDots = document.querySelectorAll('.color-palette-show .pal-dot');
-    const palettes = {
-        infantil: ['#69D7D1', '#AEEDEA', '#F7A8C8', '#FBE1EC', '#FFFFFF'],
-        debutante: ['#F7A8C8', '#FBE1EC', '#DFBA73', '#FFFBEB', '#FFFFFF'],
-        adulto: ['#3A7D7A', '#69D7D1', '#FBE1EC', '#DFBA73', '#FFFFFF']
-    };
-    const currentPal = palettes[p.type] || palettes.infantil;
-    colorDots.forEach((dot, index) => {
-        if (currentPal[index]) {
-            dot.style.backgroundColor = currentPal[index];
-            dot.title = currentPal[index];
-        }
+// Renumera os cartões visíveis em sequência, esconde grupos sem nenhum cartão e atualiza as contagens de itens
+function refreshGallery() {
+    const gallery = document.querySelector('.results-scroll-gallery');
+    if (!gallery) return;
+    let n = 0;
+    gallery.querySelectorAll('.preview-card-wrapper').forEach(card => {
+        if (card.style.display === 'none') return;
+        n++;
+        const badge = card.querySelector('.prominent-highlight-badge');
+        if (badge) badge.textContent = badge.textContent.replace(/^\d{2}\.\s*/, `${String(n).padStart(2, '0')}. `);
     });
-    
-    // 8. Pattern wallpaper
-    const patternElem = document.getElementById('paper-pattern-element');
-    if (p.type === 'infantil') {
-        patternElem.style.backgroundColor = '#FBE1EC';
-        patternElem.style.backgroundImage = `radial-gradient(#AEEDEA 15%, transparent 16%), radial-gradient(#AEEDEA 15%, transparent 16%)`;
-    } else if (p.type === 'debutante') {
-        patternElem.style.backgroundColor = '#FBE1EC';
-        patternElem.style.backgroundImage = `radial-gradient(#DFBA73 10%, transparent 11%), radial-gradient(#DFBA73 10%, transparent 11%)`;
-    } else {
-        patternElem.style.backgroundColor = '#E6F4F3';
-        patternElem.style.backgroundImage = `radial-gradient(#3A7D7A 8%, transparent 9%), radial-gradient(#3A7D7A 8%, transparent 9%)`;
-    }
-    
+    let divider = null, any = false;
+    const flush = () => { if (divider) divider.style.display = any ? '' : 'none'; };
+    Array.from(gallery.children).forEach(el => {
+        if (el.classList.contains('gallery-section-divider')) { flush(); divider = el; any = false; }
+        else if (el.classList.contains('preview-card-wrapper') && el.style.display !== 'none') any = true;
+    });
+    flush();
+
+    appState.kitItemCount = n;
+    const label = `${n} ${n === 1 ? 'item' : 'itens'}`;
+    const notice = document.querySelector('#watermark-notice h4');
+    if (notice) notice.textContent = `Esta é uma prévia completa do seu kit (${label} com marca d'água)`;
+    const checkoutTitle = document.getElementById('checkout-kit-title');
+    if (checkoutTitle) checkoutTitle.textContent = `Kit Digital Completo (${label})`;
+}
+
+// 9. DYNAMIC DATA BINDINGS & RENDERING
+// Só aparece o que foi gerado para este cliente: nenhuma arte, texto ou cor de exemplo.
+function populateResultScreen() {
+    const p = appState.currentProject || {};
+    const a = p.assetsUrls || {};
+
+    // 01 Convite
+    setResultImg(document.getElementById('invite-bg-image'), a.convitePreview || a.background || null);
+
+    // 02 Lembrete (arte gerada, com todos os textos dentro da imagem)
+    setResultImg(document.getElementById('reminder-bg-image'), a.lembretePreview || null);
+    setCardVisible('reminder-card', !!a.lembretePreview);
+
+    // 03 Mascote
+    const mascotTitle = document.getElementById('mascot-val-title');
+    if (mascotTitle) mascotTitle.textContent = p.name ? `Mascote de ${p.name}` : '';
+    setResultImg(document.getElementById('mascot-img-render'), a.mascote || null);
+    setCardVisible('mascot-card', !!a.mascote);
+
+    // 04 Prancha de elementos
+    setResultImg(document.querySelector('.elements-sheet-img'), a.elementos || null);
+    setCardVisible('elements-sheet-card', !!a.elementos);
+
+    // 05 e 06 Elementos recortados
+    setCardVisible('principais-card', !!(p.kit && p.kit.principais && p.kit.principais.length));
+    setCardVisible('complementares-card', !!(p.kit && p.kit.complementares && p.kit.complementares.length));
+
+    // 07 Fundo limpo (nunca mostra o convite, que tem texto, no lugar dele)
+    setResultImg(document.getElementById('custom-bg-render'), a.fundo || null);
+    setCardVisible('bg-card', !!a.fundo);
+
+    // 08 Lembrancinha
+    setResultImg(document.getElementById('lembrancinha-img'), a.lembrancinha || null);
+    setCardVisible('lembrancinha-card', !!a.lembrancinha);
+
+    // 09 Papel digital
+    setCardVisible('paper-card', !!a.papel);
+
+    // 10 Logotipo e 11 Brasão
+    setCardVisible('logo-card', !!a.logo);
+    setCardVisible('crest-card', !!a.brasao);
+
+    // 12 Paleta
+    setCardVisible('palette-card', !!(p.identity && Array.isArray(p.identity.palette) && p.identity.palette.length >= 5));
+
     if (p.identity) applyIdentity(p.identity);
-    applyKitExtras(p.kit, p.assetsUrls);
+    applyKitExtras(p.kit, a);
 
     updateWatermarkVisibility();
-    document.getElementById('checkout-val-theme').textContent = `Tema: ${p.theme} - ${p.name}`;
-    
-    // Highlight the first tab button initially on load
+    const checkoutTheme = document.getElementById('checkout-val-theme');
+    if (checkoutTheme) checkoutTheme.textContent = p.theme ? `Tema: ${p.theme}${p.name ? ' - ' + p.name : ''}` : '';
+    refreshGallery();
+
+    // Realça a primeira aba
     document.querySelectorAll('.tab-btn').forEach(btn => btn.classList.remove('active'));
     const firstTabBtn = document.getElementById('btn-tab-convites');
     if (firstTabBtn) firstTabBtn.classList.add('active');
@@ -1100,35 +1008,37 @@ function copyPixKey() {
 function simulatePaymentApproval() {
     appState.currentProject.watermarked = false;
     updateWatermarkVisibility();
+    renderDownloads();
     showView('download');
-    alert("Pagamento Aprovado com Sucesso! Seu kit de 12 itens de alta resolução está liberado.");
+    alert("Pagamento aprovado! Seu kit em alta resolução está liberado.");
 }
 
-// 12. DOWNLOAD & ZIP SIMULATORS
-function trackDownload(fileName) {
-    console.log(`Downloading ${fileName}...`);
-}
+// 12. DOWNLOADS: links reais para os arquivos do projeto gerado (o servidor confere se o kit foi liberado)
+function renderDownloads() {
+    const list = document.getElementById('download-options-list');
+    const warn = document.getElementById('download-unavailable');
+    if (!list) return;
+    const p = appState.currentProject || {};
+    list.innerHTML = '';
+    if (!p.projectId) {
+        if (warn) warn.style.display = '';
+        return;
+    }
+    if (warn) warn.style.display = 'none';
 
-function simulatePdfDownload(fileName) {
-    alert(`Gerando e otimizando arquivo PDF para impressão da peça [${fileName}] em alta resolução. O download começará em seguida.`);
-    
-    setTimeout(() => {
-        const link = document.createElement('a');
-        link.href = appState.currentProject.bgTemplate;
-        link.download = `Alta_Resolucao_${fileName}_Meraki.jpg`;
-        link.click();
-    }, 1500);
-}
+    const base = `${API_BASE}/downloads/${p.projectId}`;
+    const link = (href, label, cls) => `<a href="${href}" target="_blank" rel="noopener" class="dl-btn${cls ? ' ' + cls : ''}">${label}</a>`;
+    const card = (icon, title, desc, actions) => `<div class="download-item-card"><div class="item-icon-area">${icon}</div><div class="item-meta"><h4>${title}</h4><p>${desc}</p></div><div class="download-actions">${actions}</div></div>`;
 
-function simulateZipDownload() {
-    alert("Compactando todos os elementos individuais (brasão, monograma, laços, mascotes) + papéis digitais + convites sem marca d'água em um arquivo ZIP de alta resolução.");
-    
-    setTimeout(() => {
-        const link = document.createElement('a');
-        link.href = 'assets/elementos_sheet.jpg';
-        link.download = `Kit_Identidade_Visual_Completo_Meraki.zip`;
-        link.click();
-    }, 2000);
+    let html = card('✉️', 'Convite', 'Envio virtual (PNG) e versão para impressão (PDF).', link(`${base}/convite.png`, 'PNG') + link(`${base}/convite.pdf`, 'PDF', 'outline'));
+    if (p.assetsUrls && p.assetsUrls.lembretePreview) {
+        html += card('⏰', 'Lembrete', 'Card de contagem regressiva no estilo do convite.', link(`${base}/lembrete.png`, 'PNG'));
+    }
+    html += card('📦', 'Pacote completo (ZIP)', 'Todos os itens do seu kit em alta resolução, sem marca d\'água.', link(`${base}/kit.zip`, 'BAIXAR ZIP', 'btn-primary'));
+    list.innerHTML = html;
+
+    const subtitle = document.getElementById('download-subtitle');
+    if (subtitle) subtitle.textContent = `Seu kit (${appState.kitItemCount || 0} itens) em altíssima resolução foi liberado, limpo de marcas d'água, para download:`;
 }
 
 // 13. PROFESSIONAL PORTAL LOGIN & DASHBOARD LOGIC
@@ -1221,7 +1131,7 @@ function toggleInfiniteLimit() {
 
 function resetSimulator() {
     if (confirm("Deseja redefinir todo o estado do simulador (limites, configurações e projetos)?")) {
-        localStorage.removeItem('meraki_state_collage_v3');
+        localStorage.removeItem('meraki_state_collage_v4');
         appState = {
             config: {
                 kitPrice: 47.90,
@@ -1235,32 +1145,11 @@ function resetSimulator() {
                 type: 'client',
                 name: 'Cliente',
                 clientGenerationsCount: 0,
-                proDailyCount: 2,
-                proMonthlyCount: 18
+                proDailyCount: 0,
+                proMonthlyCount: 0
             },
-            currentProject: {
-                id: 101,
-                type: 'infantil',
-                name: 'Helena',
-                age: '5 anos',
-                date: '12/10/2026',
-                time: '15:30',
-                location: 'Buffet Jardim Secreto, Av. das Américas, 500',
-                phrase: 'Venha viver essa aventura no meu Jardim Encantado!',
-                theme: 'Jardim Encantado',
-                notes: 'Quero tons pastel.',
-                photos: [],
-                references: [],
-                watermarked: true,
-                bgTemplate: 'assets/infantil_bg.jpg',
-                initialLetter: 'H',
-                dateObj: new Date(2026, 9, 12)
-            },
-            projectsDb: [
-                { id: 101, name: 'Helena', type: 'infantil', theme: 'Jardim Encantado', status: 'Finalizado', date: '12/10/2026' },
-                { id: 102, name: 'Laura', type: 'debutante', theme: 'Princesa Boho', status: 'Em criação', date: '26/08/2026' },
-                { id: 103, name: 'Mariana', type: 'adulto', theme: 'Floral Delicado', status: 'Finalizado', date: '24/08/2026' }
-            ]
+            currentProject: {},
+            projectsDb: []
         };
         
         updateAdminInputFields();
@@ -1375,70 +1264,16 @@ function renderAdminProjectsTable() {
 function loadProjectToResult(projectId) {
     const proj = appState.projectsDb.find(p => p.id === projectId);
     if (!proj) return;
-    
-    const mockDetails = {
-        Helena: {
-            type: 'infantil',
-            name: 'Helena',
-            age: '5 anos',
-            date: '12/10/2026',
-            time: '15:30',
-            location: 'Buffet Jardim Secreto, Av. das Américas, 500',
-            phrase: 'Venha viver essa aventura no meu Jardim Encantado!',
-            theme: 'Jardim Encantado',
-            notes: 'Quero tons pastel.',
-            watermarked: appState.currentUser.type === 'client' && !appState.config.bypassPayment,
-            bgTemplate: 'assets/infantil_bg.jpg',
-            initialLetter: 'H',
-            dateObj: new Date(2026, 9, 12)
-        },
-        Laura: {
-            type: 'debutante',
-            name: 'Laura',
-            age: '15 anos',
-            date: '26/08/2026',
-            time: '20:00',
-            location: 'Mansão das Estrelas, Bloco B',
-            phrase: 'Um marco especial da minha vida para dividir com você!',
-            theme: 'Princesa Boho',
-            watermarked: appState.currentUser.type === 'client' && !appState.config.bypassPayment,
-            bgTemplate: 'assets/debutante_bg.jpg',
-            initialLetter: 'L',
-            dateObj: new Date(2026, 7, 26)
-        },
-        Mariana: {
-            type: 'adulto',
-            name: 'Mariana',
-            age: '40 anos',
-            date: '05/09/2026',
-            time: '19:30',
-            location: 'Bistrô das Oliveiras, Alameda Lorena, 88',
-            phrase: 'Quero brindar à vida cercada de amigos!',
-            theme: 'Floral Delicado',
-            watermarked: appState.currentUser.type === 'client' && !appState.config.bypassPayment,
-            bgTemplate: 'assets/adulto_bg.jpg',
-            initialLetter: 'M',
-            dateObj: new Date(2026, 8, 5)
-        }
-    };
-    
-    const details = mockDetails[proj.name] || {
-        type: proj.type,
-        name: proj.name,
-        age: 'Festa',
-        date: proj.date,
-        time: '19:00',
-        location: 'Salão de Festas Residencial',
-        phrase: 'Venha celebrar!',
-        theme: proj.theme,
+    if (!proj.snapshot) {
+        alert('A arte deste projeto não está salva neste navegador.');
+        return;
+    }
+    appState.currentProject = {
+        ...proj.snapshot,
+        dateObj: proj.snapshot.dateObj ? new Date(proj.snapshot.dateObj) : null,
         watermarked: appState.currentUser.type === 'client' && !appState.config.bypassPayment,
-        bgTemplate: getBgTemplatePath(proj.type),
-        initialLetter: proj.name.charAt(0).toUpperCase(),
-        dateObj: new Date()
     };
-    
-    appState.currentProject = { id: proj.id, ...details };
-    
+
     populateResultScreen();
     showView('result');
 }

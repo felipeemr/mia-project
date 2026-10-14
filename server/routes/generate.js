@@ -76,17 +76,34 @@ router.post('/', optionalAuth, upload.fields([
     { name: 'photos', maxCount: 1 },
     { name: 'references', maxCount: 5 }
 ]), async (req, res) => {
+    // Todos os campos do formulário são obrigatórios: nada é preenchido por conta do servidor
+    const body = req.body || {};
+    const str = (v) => (typeof v === 'string' ? v.trim() : '');
+    const faltando = [];
+    if (!['infantil', 'debutante', 'adulto'].includes(str(body.type))) faltando.push('tipo de festa');
+    if (!str(body.name))     faltando.push('nome');
+    if (!str(body.age))      faltando.push('idade');
+    if (!['m', 'f'].includes(str(body.gender))) faltando.push('menino ou menina');
+    if (!str(body.date))     faltando.push('data da festa');
+    if (!str(body.time))     faltando.push('horário');
+    if (!str(body.location)) faltando.push('local');
+    if (!str(body.theme))    faltando.push('tema');
+    if (!(req.files?.photos?.length)) faltando.push('foto da criança');
+    if (faltando.length) {
+        return res.status(400).json({ error: `Preencha todos os campos obrigatórios: ${faltando.join(', ')}.` });
+    }
+
     const projectData = {
-        type:     req.body.type     || 'infantil',
-        name:     req.body.name     || 'Aniversariante',
-        age:      req.body.age      || '',
-        date:     req.body.date     || '',
-        time:     req.body.time     || '',
-        location: req.body.location || '',
-        gender:   req.body.gender === 'm' ? 'm' : 'f',   // menino/menina: define "Obrigado"/"Obrigada" na lembrancinha
-        phrase:   pickPhrase(req.body.type || 'infantil'), // sorteada pelo sistema (frases curtas e genéricas)
-        theme:    req.body.theme    || '',
-        notes:    req.body.notes    || '',
+        type:     str(body.type),
+        name:     str(body.name),
+        age:      str(body.age),
+        date:     str(body.date),
+        time:     str(body.time),
+        location: str(body.location),
+        gender:   str(body.gender),                        // menino/menina: define "Obrigado"/"Obrigada" na lembrancinha
+        phrase:   pickPhrase(str(body.type)),              // sorteada pelo sistema (frases curtas e genéricas)
+        theme:    str(body.theme),
+        notes:    str(body.notes),                         // único campo opcional (observações livres)
     };
     projectData.initialLetter = projectData.name.charAt(0).toUpperCase();
 

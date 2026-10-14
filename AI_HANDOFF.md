@@ -67,6 +67,9 @@ Custo estimado por kit completo: **US$ 0,70 a 1,00** (convite no Pro ~US$ 0,13 p
 - **Frase do convite:** sorteada pelo sistema entre frases curtas e genéricas por tipo de festa (`services/phrases.js`). O campo livre foi removido (menos erro de escrita e sem slogans de marcas).
 - **Menino/menina:** pergunta no formulário (debutante é sempre menina). Define "Obrigado"/"Obrigada". **Não é salvo no banco** (a tabela não tem a coluna).
 - **1 foto por criança** (formulário e servidor).
+- **Formulário 100% obrigatório e sem nada pré-preenchido** (tipo, nome, idade, menino/menina, data, tema, horário, local e foto; só referências e observações são opcionais). O servidor também valida e responde 400 se faltar algo; ele não preenche valores por conta própria.
+- **O cliente só vê o que foi gerado para ele:** nenhuma arte, texto, cor ou nome de exemplo (cada cartão da galeria só aparece se o item existe, a numeração é recalculada e os grupos vazios somem). As miniaturas "Estilos sugeridos" só escolhem o tipo de festa.
+- **Downloads reais:** PNG/PDF do convite, PNG do lembrete e ZIP vêm da API (`/api/downloads/:id/...`). Antes eram simulados e entregavam imagens de exemplo.
 - **Qualidade das imagens da OpenAI fixa em `medium`** (`POSTER_IMAGE_QUALITY` em `ai.js`).
 - **Convite sempre retrato 2:3**; prévia e PDF mantêm a proporção da arte (nada é cortado).
 - **Todos os itens precisam combinar com o convite** (mesmo estilo, cores, personagem e letras). Por isso o convite aprovado entra como imagem de referência nas demais chamadas.
@@ -169,7 +172,13 @@ Scripts manuais (gastam crédito): `node test-gemini.js --list`, `test-pipeline.
 - [ ] **Lembrancinha:** deixar o estilo do agradecimento igual ao do logotipo, aproximar os dois textos (sobra espaço no meio) e tratar a baixa resolução do fundo (vem de 848×1264).
 - [ ] **Logotipo idêntico ao título do convite:** hoje é "da mesma família"; se for preciso idêntico, recortar o título direto da imagem do convite (com o fundo da cena).
 - [ ] Decidir se junta **05 e 06 em um único item "Elementos avulsos"** (a divisão principais/complementares é artificial).
-- [ ] **Tela de downloads (pós-pagamento):** botões individuais ainda apontam para arquivos de exemplo (`assets/*.jpg`); ligar aos arquivos reais. Testar o ZIP completo (pastas 05/06 e nova numeração).
+- [x] ~~Tela de downloads ligada aos arquivos reais~~ (feito; falta **testar o ZIP completo** pelo site com projeto salvo).
+- [ ] **Painel de testes e tela Admin:** o botão 🛠️ agora só aparece com `?dev=1` na URL, mas a tela **Admin** e a navegação `navTo` continuam acessíveis por esse painel; proteger o Admin de verdade (login) antes de publicar.
+- [ ] **Limites e pagamento forçados no código:** em `DOMContentLoaded` (`app.js`) `bypassPayment` e `infiniteLimit` são ligados para todos ("DEVELOPER PRESETS"), e o botão "aprovar pagamento" do checkout só simula. Remover quando o pagamento real existir.
+- [ ] **Painel Pro:** os projetos mostrados agora são só os gerados pelo próprio usuário (guardados no navegador, `localStorage`); falta guardar/ler do banco.
+- [ ] E-mail de suporte escrito fixo no `LEIA-ME` do ZIP (`suporte@merakiartesdigitais.com.br`): confirmar se existe ou trocar.
+- [ ] Página inicial ainda usa imagens de exemplo (`assets/*.jpg`) como vitrine de marketing; decidir se ficam ou se trocam por exemplos reais do produto.
+- [ ] Decidir se **referências e observações** também passam a ser obrigatórias no formulário.
 - [ ] **Mascote na tela:** aparece pequeno numa moldura circular; melhorar o enquadramento.
 - [ ] Testar a fundo **15 anos (debutante) e adulto** (prompts, frases, estilos); só o infantil foi testado a fundo.
 - [ ] Ajustar `npm run dev` para subir só o backend (porta 3001) e não expor a pasta pela porta 3000.
