@@ -14,6 +14,8 @@ const { generateKitImages }        = require('../services/ai');
 const { uploadFromUrl, uploadBuffer } = require('../services/storage');
 const { renderConvite, renderLembrete, createThumbnail } = require('../services/renderer');
 const { buildIdentity } = require('../services/identity');
+const { generateKitExtras } = require('../services/kit');
+const { pickPhrase } = require('../services/phrases');
 const { optionalAuth }             = require('../middleware/auth');
 
 // Multer em memória para upload de fotos do formulário
@@ -81,7 +83,8 @@ router.post('/', optionalAuth, upload.fields([
         date:     req.body.date     || '',
         time:     req.body.time     || '',
         location: req.body.location || '',
-        phrase:   req.body.phrase   || '',
+        gender:   req.body.gender === 'm' ? 'm' : 'f',   // menino/menina: define "Obrigado"/"Obrigada" na lembrancinha
+        phrase:   pickPhrase(req.body.type || 'infantil'), // sorteada pelo sistema (frases curtas e genéricas)
         theme:    req.body.theme    || '',
         notes:    req.body.notes    || '',
     };
@@ -103,11 +106,13 @@ router.post('/', optionalAuth, upload.fields([
     // --- 2. Criar registro no banco com status 'generating' ---
     let projectId = null;
     try {
-        const { data: projectRecord } = await supabaseAdmin
+        // initialLetter (camelCase) não é coluna da tabela: vai como initial_letter
+        const { initialLetter: _ignored, gender: _gender, ...dbFields } = projectData;
+        const { data: projectRecord, error: insertError } = await supabaseAdmin
             .from('projects')
             .insert({
                 user_id:       req.user?.id || null,
-                ...projectData,
+                ...dbFields,
                 initial_letter: projectData.initialLetter,
                 bg_template:   DEFAULT_BG[projectData.type],
                 status:        'generating',
@@ -117,10 +122,15 @@ router.post('/', optionalAuth, upload.fields([
             .select('id')
             .single();
 
+        if (insertError) console.warn('[Generate] Aviso: projeto não salvo no banco:', insertError.message);
         if (projectRecord) projectId = projectRecord.id;
     } catch (dbErr) {
         console.warn('[Generate] Aviso: não foi possível salvar projeto no banco:', dbErr.message);
     }
+
+    // Pasta única desta geração no armazenamento. Sem projeto no banco, usa um id aleatório:
+    // caminhos fixos eram sobrescritos e a CDN devolvia imagens de gerações anteriores.
+    const storageId = projectId || `tmp-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
 
     // --- 3. Definir fundo: tenta IA, cai em padrão se falhar ---
     let bgBuffer    = null;
@@ -129,7 +139,7 @@ router.post('/', optionalAuth, upload.fields([
     const bgDefault = DEFAULT_BG[projectData.type];
 
     try {
-        const aiAvailable = !!process.env.OPENAI_API_KEY;
+        const aiAvailable = !!(process.env.GEMINI_API_KEY || process.env.OPENAI_API_KEY);
 
         if (aiAvailable) {
             console.log('[Generate] Chamando API de IA para geração das imagens...');
@@ -140,7 +150,7 @@ router.post('/', optionalAuth, upload.fields([
             const savePromises = Object.entries(aiImages).map(async ([key, url]) => {
                 if (!url || key === '_dna') return; // Ignora _dna, pois não é uma URL de imagem
                 try {
-                    const savedUrl = await uploadFromUrl(url, `projects/${projectId}/${key}.png`);
+                    const savedUrl = await uploadFromUrl(url, `projects/${storageId}/${key}.png`);
                     assetsUrls[key] = savedUrl;
                 } catch (e) {
                     console.warn(`[Generate] Falha ao salvar ${key}:`, e.message);
@@ -150,14 +160,16 @@ router.post('/', optionalAuth, upload.fields([
             });
             await Promise.all(savePromises);
 
-            // Usa o fundo gerado pela IA para o convite (suporta URL remota e Data URI)
-            if (assetsUrls.background) {
-                if (assetsUrls.background.startsWith('data:')) {
-                    const base64Part = assetsUrls.background.replace(/^data:image\/\w+;base64,/, '');
-                    bgBuffer = Buffer.from(base64Part, 'base64');
+            // Usa o convite que a IA acabou de gerar. IMPORTANTE: vem da memória (Data URI) ou da URL original da IA,
+            // e NÃO da URL pública do Supabase: ela pode devolver, pelo cache da CDN, o convite de uma geração anterior
+            // (isso fazia mascote, prancha e fundo saírem com o tema do convite antigo).
+            const rawBg = aiImages.background;
+            if (rawBg) {
+                if (rawBg.startsWith('data:')) {
+                    bgBuffer = Buffer.from(rawBg.replace(/^data:image\/\w+;base64,/, ''), 'base64');
                 } else {
                     const axios = require('axios');
-                    const resp  = await axios.get(assetsUrls.background, { responseType: 'arraybuffer', timeout: 30000 });
+                    const resp  = await axios.get(rawBg, { responseType: 'arraybuffer', timeout: 30000 });
                     bgBuffer    = Buffer.from(resp.data);
                 }
             }
@@ -197,7 +209,7 @@ router.post('/', optionalAuth, upload.fields([
         if (projectId) {
             // Se a IA gerou um lembrete nativo, usamos ele como preview
             lembreteUrl = assetsUrls.lembrete || null;
-            await uploadBuffer(conviteThumb, `projects/${projectId}/convite_thumb.jpg`,    'image/jpeg');
+            await uploadBuffer(conviteThumb, `projects/${storageId}/convite_thumb.jpg`,    'image/jpeg');
         }
 
         assetsUrls.convite_preview  = null; // Usará background
@@ -212,6 +224,61 @@ router.post('/', optionalAuth, upload.fields([
         identity = await buildIdentity(projectData, bgBuffer, aiDna);
     } catch (idErr) {
         console.warn('[Generate] Aviso ao montar identidade visual:', idErr.message);
+    }
+
+    // --- 4c. Itens extras do kit (mascote, prancha, elementos, fundo, papel), coerentes com o convite ---
+    // Desligue com KIT_EXTRAS=off no .env (cada geração custa ~US$ 0,27 a mais).
+    let kit = null;
+    const kitUrls = {};
+    if (process.env.KIT_EXTRAS !== 'off' && process.env.GEMINI_API_KEY) {
+        try {
+            const extras = await generateKitExtras({
+                invitation: bgBuffer,
+                childPhoto: childPhotos[0]?.buffer || null,
+                themeText: projectData.theme,
+                palette: identity?.palette || null,
+                name: projectData.name,
+                age: projectData.age,
+                gender: projectData.gender,
+                project: { date: projectData.date, time: projectData.time, location: projectData.location },
+            });
+
+            // Guarda no Supabase; se falhar, devolve a imagem embutida (data URL) só para esta resposta
+            const pid = storageId;
+            const saveBuf = async (buf, name) => {
+                if (!buf) return null;
+                try { return await uploadBuffer(buf, `projects/${pid}/${name}`, 'image/png'); }
+                catch (e) {
+                    console.warn(`[Generate] Falha ao salvar ${name} no storage: ${e.message}`);
+                    return `data:image/png;base64,${buf.toString('base64')}`;
+                }
+            };
+            const saveList = (list, prefix) => Promise.all((list || []).map((e, i) => saveBuf(e.png, `${prefix}_${String(i + 1).padStart(2, '0')}.png`)));
+
+            const [mascote, elementos, fundo, papel, principais, complementares, logo, lembrete, brasao, lembrancinha] = await Promise.all([
+                saveBuf(extras.mascote, 'mascote.png'),
+                saveBuf(extras.elementosSheet, 'prancha_elementos.png'),
+                saveBuf(extras.fundo, 'fundo_limpo.png'),
+                saveBuf(extras.papel, 'papel_digital.png'),
+                saveList(extras.principais, 'elemento_principal'),
+                saveList(extras.complementares, 'elemento_complementar'),
+                saveBuf(extras.logo, 'logotipo.png'),
+                saveBuf(extras.lembrete, 'lembrete.png'),
+                saveBuf(extras.brasao, 'brasao.png'),
+                saveBuf(extras.lembrancinha, 'lembrancinha.png'),
+            ]);
+            Object.assign(kitUrls, { mascote, elementos, fundo, papel, logo, lembrete, brasao, lembrancinha });
+            kit = { principais: principais.filter(Boolean), complementares: complementares.filter(Boolean) };
+
+            // No banco entram só URLs de verdade (nunca imagens embutidas)
+            const http = u => (u && /^https?:/.test(u)) ? u : null;
+            for (const k of ['mascote', 'elementos', 'fundo', 'papel', 'logo', 'lembrete', 'brasao', 'lembrancinha']) if (http(kitUrls[k])) assetsUrls[k] = kitUrls[k];
+            assetsUrls.kit_files = {
+                principais: kit.principais.filter(http), complementares: kit.complementares.filter(http),
+            };
+        } catch (kitErr) {
+            console.warn('[Generate] Aviso ao gerar itens extras do kit:', kitErr.message);
+        }
     }
 
     // --- 5. Atualizar status do projeto no banco ---
@@ -245,17 +312,21 @@ router.post('/', optionalAuth, upload.fields([
         assetsUrls: {
             // Imagens geradas por IA (com cache-buster para forçar a atualização no navegador)
             background:   applyCacheBuster(assetsUrls.background),
-            mascote:      applyCacheBuster(assetsUrls.mascote),
-            elementos:    applyCacheBuster(assetsUrls.elementos),
-            fundo:        applyCacheBuster(assetsUrls.fundo),
-            papel:        applyCacheBuster(assetsUrls.papel),
+            mascote:      applyCacheBuster(kitUrls.mascote   || assetsUrls.mascote),
+            elementos:    applyCacheBuster(kitUrls.elementos || assetsUrls.elementos),
+            fundo:        applyCacheBuster(kitUrls.fundo     || assetsUrls.fundo),
+            papel:        applyCacheBuster(kitUrls.papel     || assetsUrls.papel),
+            logo:         applyCacheBuster(kitUrls.logo      || assetsUrls.logo),
             // Convite e lembrete renderizados em alta resolução
             convitePreview:  applyCacheBuster(assetsUrls.convite_preview),
-            lembretePreview: applyCacheBuster(assetsUrls.lembrete_preview),
+            lembretePreview: applyCacheBuster(kitUrls.lembrete || assetsUrls.lembrete_preview),
+            brasao:          applyCacheBuster(kitUrls.brasao),
+            lembrancinha:    applyCacheBuster(kitUrls.lembrancinha),
             // DNA Visual extraído (tipografia, ícones)
             _dna:            aiDna,
         },
         identity,
+        kit,
         project: {
             ...projectData,
             id: projectId,

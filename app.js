@@ -129,7 +129,7 @@ async function apiGenerateKit(projectData) {
             method:  'POST',
             headers: _authToken ? { 'Authorization': `Bearer ${_authToken}` } : {},
             body:    formData,
-            signal:  AbortSignal.timeout(300000), // 5 minutos para suportar o rate limit do Replicate Free
+            signal:  AbortSignal.timeout(600000), // 10 minutos: convite (até ~5 min no pior caso) + itens do kit (~1,5 min)
         });
         if (!res.ok) {
             const errData = await res.json().catch(() => ({}));
@@ -143,10 +143,12 @@ async function apiGenerateKit(projectData) {
 }
 
 
-function applyRealAssets(assetsUrls, projectId, identity) {
+function applyRealAssets(assetsUrls, projectId, identity, phrase, kit) {
     if (!assetsUrls) return;
     appState.currentProject.assetsUrls = assetsUrls;
     appState.currentProject.identity = identity || null;
+    appState.currentProject.kit = kit || null;
+    if (phrase) appState.currentProject.phrase = phrase;
     appState.currentProject.projectId  = projectId;
     saveStateToStorage();
 
@@ -243,7 +245,17 @@ document.addEventListener('DOMContentLoaded', () => {
 
 // Save and Load State
 function saveStateToStorage() {
-    localStorage.setItem('meraki_state_collage_v3', JSON.stringify(appState));
+    // Ignora imagens embutidas (data URLs) e o kit: são grandes e não precisam ser guardadas
+    try {
+        const json = JSON.stringify(appState, (k, v) => {
+            if (k === 'kit') return undefined;
+            if (typeof v === 'string' && v.startsWith('data:') && v.length > 2000) return undefined;
+            return v;
+        });
+        localStorage.setItem('meraki_state_collage_v3', json);
+    } catch (e) {
+        console.warn('Não foi possível salvar o estado local:', e.message);
+    }
 }
 
 function loadStateFromStorage() {
@@ -462,10 +474,74 @@ function applyIdentity(identity) {
 
     // 7. Papel digital (09): estampa com as cores da paleta
     const pattern = document.getElementById('paper-pattern-element');
-    if (pattern) {
+    if (pattern && !(appState.currentProject && appState.currentProject.assetsUrls && appState.currentProject.assetsUrls.papel)) {
         pattern.style.backgroundColor = light;
         pattern.style.backgroundImage =
             `radial-gradient(${accent} 15%, transparent 16%), radial-gradient(${primary} 10%, transparent 11%)`;
+    }
+}
+
+// ---------------------------------------------------------------------------
+// Itens do kit gerados a partir do convite: elementos recortados, ilustrações e papel digital
+// ---------------------------------------------------------------------------
+function applyKitExtras(kit, assetsUrls) {
+    const tile = (src, maxH) => `<div class="brand-item-box watermarked" style="padding:10px;"><img src="${src}" alt="Elemento do tema" style="width:100%; max-height:${maxH}px; object-fit:contain; position:relative; z-index:1;"><div class="watermark-pattern-layer"><span>PRÉVIA</span></div></div>`;
+
+    if (kit) {
+        const fill = (id, list, maxH, cols) => {
+            const el = document.getElementById(id);
+            if (!el || !Array.isArray(list) || !list.length) return;
+            el.innerHTML = list.map(u => tile(u, maxH)).join('');
+            el.style.gridTemplateColumns = `repeat(${cols}, 1fr)`;
+        };
+        fill('kit-principais-grid', kit.principais, 180, 2);
+        fill('kit-complementares-grid', kit.complementares, 110, 3);
+
+    }
+
+    // Brasão e monograma gerados no estilo e nas letras do convite (substituem os desenhos fixos)
+    const showBrandImage = (boxId, url, alt) => {
+        const box = document.getElementById(boxId);
+        const wrap = box && box.querySelector('.svg-wrapper');
+        if (!wrap || !url) return;
+        const svg = wrap.querySelector('svg');
+        if (svg) svg.style.display = 'none';
+        let img = wrap.querySelector('img.brand-ai-img');
+        if (!img) {
+            img = document.createElement('img');
+            img.className = 'brand-ai-img';
+            img.alt = alt;
+            img.style.cssText = 'max-width:100%; max-height:190px; object-fit:contain; position:relative; z-index:1;';
+            wrap.appendChild(img);
+        }
+        img.src = url;
+    };
+    showBrandImage('crest-box', assetsUrls && assetsUrls.brasao, 'Brasão da aniversariante');
+
+    // Logotipo: imagem com as mesmas letras do título do convite (substitui o nome em fonte do navegador)
+    const logo = assetsUrls && assetsUrls.logo;
+    const logoName = document.getElementById('logo-val-name');
+    if (logo && logoName) {
+        logoName.style.display = 'none';
+        let img = document.getElementById('logo-val-img');
+        if (!img) {
+            img = document.createElement('img');
+            img.id = 'logo-val-img';
+            img.alt = 'Logotipo da festa';
+            img.style.cssText = 'max-width:100%; max-height:140px; object-fit:contain; position:relative; z-index:1;';
+            logoName.parentNode.insertBefore(img, logoName);
+        }
+        img.src = logo;
+    }
+
+    // Papel digital: usa a estampa gerada com os elementos do tema
+    const papel = assetsUrls && assetsUrls.papel;
+    const pattern = document.getElementById('paper-pattern-element');
+    if (papel && pattern) {
+        pattern.style.backgroundImage = `url("${papel}")`;
+        pattern.style.backgroundSize = 'cover';
+        pattern.style.backgroundPosition = 'center';
+        pattern.style.backgroundRepeat = 'no-repeat';
     }
 }
 
@@ -548,6 +624,14 @@ function toggleFormFields() {
     const groupAge = document.getElementById('group-party-age');
     const labelPhotos = document.getElementById('label-photos-upload');
     const inputAge = document.getElementById('partyAge');
+    const groupGender = document.getElementById('group-party-gender');
+    if (groupGender) {
+        groupGender.style.display = partyType === 'debutante' ? 'none' : '';
+        if (partyType === 'debutante') {
+            const girl = document.querySelector('input[name="partyGender"][value="f"]');
+            if (girl) girl.checked = true;
+        }
+    }
     
     if (partyType === 'infantil') {
         labelName.textContent = "Nome da criança";
@@ -621,11 +705,12 @@ function prefillAndGenerate(type) {
     const data = formFields[type];
     
     document.getElementById('partyName').value = data.name;
+    const presetGender = document.querySelector(`input[name="partyGender"][value="${data.gender || 'f'}"]`);
+    if (presetGender) presetGender.checked = true;
     document.getElementById('partyAge').value = data.age;
     document.getElementById('partyDate').value = data.date;
     document.getElementById('partyTime').value = data.time;
     document.getElementById('partyLocation').value = data.location;
-    document.getElementById('partyInvitePhrase').value = data.phrase;
     document.getElementById('partyTheme').value = data.theme;
     document.getElementById('partyNotes').value = data.notes;
     
@@ -644,10 +729,10 @@ function handleGeneratorSubmit(event) {
     const partyType = document.querySelector('input[name="partyType"]:checked').value;
     const name = document.getElementById('partyName').value;
     const age = document.getElementById('partyAge').value;
+    const gender = (document.querySelector('input[name="partyGender"]:checked') || {}).value || 'f';
     const dateStr = document.getElementById('partyDate').value;
     const time = document.getElementById('partyTime').value;
     const location = document.getElementById('partyLocation').value;
-    const phrase = document.getElementById('partyInvitePhrase').value;
     const theme = document.getElementById('partyTheme').value;
     const notes = document.getElementById('partyNotes').value;
     
@@ -682,10 +767,11 @@ function handleGeneratorSubmit(event) {
         type: partyType,
         name: name,
         age: age,
+        gender: gender,
         date: formattedDate,
         time: time,
         location: location,
-        phrase: phrase || getDefaultPhrase(partyType, name),
+        phrase: '', // o servidor sorteia a frase do convite
         theme: theme,
         notes: notes,
         watermarked: appState.currentUser.type === 'client' && !appState.config.bypassPayment,
@@ -797,57 +883,65 @@ function startLoadingProgressAnimation() {
                 return;
             }
             
-            showView('result');
-            populateResultScreen();
-
-            // Aplica as imagens reais da IA (se disponíveis)
+            // Aplica as imagens reais da IA ANTES de mostrar a tela: assim nunca aparece imagem de exemplo
+            // antes da imagem gerada (applyRealAssets já monta a tela de resultado com os dados reais).
             if (apiResult?.assetsUrls) {
-                applyRealAssets(apiResult.assetsUrls, apiResult.projectId, apiResult.identity);
+                applyRealAssets(apiResult.assetsUrls, apiResult.projectId, apiResult.identity, apiResult.project?.phrase, apiResult.kit);
+                // Processa DNA da IA (Fontes e Ícones) da Fase 6
+                if (apiResult.assetsUrls._dna) applyAiDna(apiResult.assetsUrls._dna);
+            } else {
+                populateResultScreen(); // modo sem backend: usa as artes de exemplo
             }
-            
-            // Processa DNA da IA (Fontes e Ícones) da Fase 6
-            if (apiResult?.assetsUrls?._dna) {
-                applyAiDna(apiResult.assetsUrls._dna);
-            }
+            showView('result');
         }
     }, 80);
 }
 
+
+// Imagem transparente de 1x1: as imagens do resultado nascem com ela (nunca uma arte de exemplo)
+const BLANK_IMG = 'data:image/gif;base64,R0lGODlhAQABAAAAACH5BAEKAAEALAAAAAABAAEAAAICTAEAOw==';
+
+// Define a imagem de um item do resultado. Sem URL, fica vazia. Com URL, só aparece (fade) quando termina de carregar.
+function setResultImg(el, url) {
+    if (!el) return;
+    el.classList.add('result-img');
+    if (!url) { el.classList.remove('loaded'); el.onload = null; el.src = BLANK_IMG; return; }
+    if (el.getAttribute('src') === url && el.complete && el.naturalWidth > 0) { el.classList.add('loaded'); return; }
+    el.classList.remove('loaded');
+    el.onload = () => el.classList.add('loaded');
+    el.onerror = () => el.classList.remove('loaded');
+    el.src = url;
+}
 
 // 9. DYNAMIC DATA BINDINGS & RENDERING
 function populateResultScreen() {
     const p = appState.currentProject;
     
     // 1. Invitation overlay texts
-    const bgUrl = p.assetsUrls?.convitePreview || p.assetsUrls?.background || p.bgTemplate;
-    document.getElementById('invite-bg-image').src = bgUrl;
+    // Dados reais (gerados pela IA) => só imagens geradas. Sem backend (modo de exemplo) => artes de exemplo.
+    const isReal = !!(p.assetsUrls && (p.assetsUrls.background || p.assetsUrls.convitePreview));
+    const bgUrl = p.assetsUrls?.convitePreview || p.assetsUrls?.background || (isReal ? null : p.bgTemplate);
+    setResultImg(document.getElementById('invite-bg-image'), bgUrl);
     
     // 2. RSVP/Reminder overlay texts
-    document.getElementById('reminder-val-name').textContent = p.name;
-    document.getElementById('reminder-val-age').textContent = p.age;
-    document.getElementById('reminder-val-time').textContent = `${p.time}h`;
-    document.getElementById('reminder-val-location').textContent = p.location.split(',')[0];
     
     // Set reminder background image to match the invitation background
     const reminderBg = document.getElementById('reminder-bg-image');
-    if (reminderBg) reminderBg.src = p.assetsUrls?.lembretePreview || p.assetsUrls?.background || p.bgTemplate;
+    const hasGenReminder = !!(p.assetsUrls && p.assetsUrls.lembretePreview);
+    setResultImg(reminderBg, hasGenReminder ? p.assetsUrls.lembretePreview : (p.assetsUrls?.background || (isReal ? null : p.bgTemplate)));
+    // O lembrete gerado pela IA já traz todos os textos dentro da arte (nada é sobreposto)
     
-    if (p.dateObj) {
-        document.getElementById('reminder-val-day').textContent = p.dateObj.getDate();
-        const months = ['JAN', 'FEV', 'MAR', 'ABR', 'MAI', 'JUN', 'JUL', 'AGO', 'SET', 'OUT', 'NOV', 'DEZ'];
-        document.getElementById('reminder-val-month').textContent = months[p.dateObj.getMonth()];
-    }
 
     // 3. Mascote official
     document.getElementById('mascot-val-title').textContent = `Mascote de ${p.name}`;
     const mascotImg = document.getElementById('mascot-img-render');
     if (mascotImg) {
         if (p.assetsUrls?.mascote) {
-            mascotImg.src = p.assetsUrls.mascote;
-        } else if (p.type === 'debutante') {
-            mascotImg.src = 'assets/girl_2.jpg';
+            setResultImg(mascotImg, p.assetsUrls.mascote);
+        } else if (isReal) {
+            setResultImg(mascotImg, null); // gerado de verdade, mas este item não saiu: não mostra a arte de exemplo
         } else {
-            mascotImg.src = 'assets/girl_1.jpg';
+            setResultImg(mascotImg, p.type === 'debutante' ? 'assets/girl_2.jpg' : 'assets/girl_1.jpg');
         }
     }
 
@@ -857,18 +951,24 @@ function populateResultScreen() {
 
     // 5. Custom Background render
     const bgRender = document.getElementById('custom-bg-render');
-    if (bgRender) bgRender.src = p.assetsUrls?.fundo || p.assetsUrls?.background || p.bgTemplate;
+    // Lembrancinha (fundo limpo quadrado + logotipo + agradecimento): o cartão só aparece se foi gerada
+    const favorUrl = p.assetsUrls && p.assetsUrls.lembrancinha;
+    const favorCard = document.getElementById('lembrancinha-card');
+    if (favorCard) favorCard.style.display = favorUrl ? '' : 'none';
+    setResultImg(document.getElementById('lembrancinha-img'), favorUrl || null);
+
+    // Fundo limpo: nunca mostra o convite (que tem texto) no lugar do fundo
+    setResultImg(bgRender, p.assetsUrls?.fundo || (isReal ? null : p.bgTemplate));
 
     // 6. Elementos sheet & Papel digital
     const elemImg = document.querySelector('.elements-sheet-img');
-    if (elemImg && p.assetsUrls?.elementos) elemImg.src = p.assetsUrls.elementos;
+    setResultImg(elemImg, p.assetsUrls?.elementos || (isReal ? null : 'assets/elementos_sheet.jpg'));
 
     const papelImg = document.querySelector('.digital-paper-img');
     if (papelImg && p.assetsUrls?.papel) papelImg.src = p.assetsUrls.papel;
 
 
     // 6. Monograms & Crest letter SVGs
-    document.getElementById('brand-val-initial').textContent = p.initialLetter;
     document.getElementById('brand-val-initial-crest').textContent = p.initialLetter;
     document.getElementById('brand-val-year').textContent = p.dateObj.getFullYear();
     
@@ -901,6 +1001,7 @@ function populateResultScreen() {
     }
     
     if (p.identity) applyIdentity(p.identity);
+    applyKitExtras(p.kit, p.assetsUrls);
 
     updateWatermarkVisibility();
     document.getElementById('checkout-val-theme').textContent = `Tema: ${p.theme} - ${p.name}`;
@@ -952,7 +1053,8 @@ function updateWatermarkVisibility() {
         'crest-box',
         'logo-brand-box',
         'mascot-showcase-container',
-        'bg-custom-container'
+        'bg-custom-container',
+        'lembrancinha-container'
     ];
     
     containers.forEach(id => {
@@ -999,7 +1101,7 @@ function simulatePaymentApproval() {
     appState.currentProject.watermarked = false;
     updateWatermarkVisibility();
     showView('download');
-    alert("Pagamento Aprovado com Sucesso! Seu kit de 15 itens de alta resolução está liberado.");
+    alert("Pagamento Aprovado com Sucesso! Seu kit de 12 itens de alta resolução está liberado.");
 }
 
 // 12. DOWNLOAD & ZIP SIMULATORS

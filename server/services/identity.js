@@ -157,14 +157,102 @@ function pickFonts(type = 'infantil', dna = null) {
     };
 }
 
+// ---------------------------------------------------------------------------
+// Catálogo de fontes livres (Google Fonts) para escolher a MAIS PARECIDA com o título do convite
+// ---------------------------------------------------------------------------
+const FONT_CATALOG = {
+    main: [
+        { family: 'Fredoka',            category: 'display', weights: [500, 700], desc: 'rounded, friendly, bold, playful kids' },
+        { family: 'Baloo 2',            category: 'display', weights: [600, 800], desc: 'rounded bubbly cheerful kids' },
+        { family: 'Lilita One',         category: 'display', weights: [400],      desc: 'chunky rounded heavy display' },
+        { family: 'Titan One',          category: 'display', weights: [400],      desc: 'very fat rounded bubbly cartoon' },
+        { family: 'Luckiest Guy',       category: 'display', weights: [400],      desc: 'comic-book bold chunky capitals' },
+        { family: 'Bangers',            category: 'display', weights: [400],      desc: 'comic action capitals, superhero' },
+        { family: 'Righteous',          category: 'display', weights: [400],      desc: 'rounded geometric retro-modern, neon' },
+        { family: 'Audiowide',          category: 'display', weights: [400],      desc: 'rounded techno futuristic, neon, pop stage' },
+        { family: 'Orbitron',           category: 'display', weights: [600, 800], desc: 'futuristic geometric sci-fi' },
+        { family: 'Press Start 2P',     category: 'display', weights: [400],      desc: 'pixel 8-bit video game' },
+        { family: 'Bebas Neue',         category: 'sans',    weights: [400],      desc: 'tall condensed bold capitals, posters' },
+        { family: 'Anton',              category: 'sans',    weights: [400],      desc: 'heavy condensed headline capitals' },
+        { family: 'Montserrat',         category: 'sans',    weights: [600, 800], desc: 'clean geometric sans, modern' },
+        { family: 'Playfair Display',   category: 'serif',   weights: [600, 700], desc: 'elegant high-contrast serif' },
+        { family: 'Cinzel',             category: 'serif',   weights: [600, 700], desc: 'classic roman capitals, regal, fantasy' },
+        { family: 'Cormorant Garamond', category: 'serif',   weights: [600, 700], desc: 'refined classic serif, rustic, delicate' },
+        { family: 'Great Vibes',        category: 'script',  weights: [400],      desc: 'formal calligraphy script, debutante' },
+        { family: 'Pacifico',           category: 'script',  weights: [400],      desc: 'casual brush script, fun' },
+        { family: 'Sacramento',         category: 'script',  weights: [400],      desc: 'thin elegant monoline script' },
+    ],
+    complementary: [
+        { family: 'Nunito',   category: 'sans', weights: [400, 600], desc: 'rounded friendly sans' },
+        { family: 'Quicksand', category: 'sans', weights: [400, 600], desc: 'soft rounded geometric sans' },
+        { family: 'Poppins',  category: 'sans', weights: [400, 500], desc: 'geometric sans, neutral' },
+        { family: 'Inter',    category: 'sans', weights: [400, 500], desc: 'neutral modern sans' },
+        { family: 'Lato',     category: 'sans', weights: [400, 700], desc: 'humanist sans, warm' },
+        { family: 'Roboto Condensed', category: 'sans', weights: [400, 700], desc: 'condensed sans, compact' },
+        { family: 'VT323',    category: 'mono', weights: [400], desc: 'pixel terminal monospace' },
+    ],
+};
+
+function googleFontsUrlFor(fonts) {
+    const families = fonts
+        .map(f => `family=${encodeURIComponent(f.family).replace(/%20/g, '+')}:wght@${f.weights.join(';')}`)
+        .join('&');
+    return `https://fonts.googleapis.com/css2?${families}&display=swap`;
+}
+
+/**
+ * Escolhe, olhando a imagem do convite, as fontes do catálogo mais parecidas com
+ * o título (principal) e com os textos menores (complementar). Se a análise falhar,
+ * devolve o par de reserva (por tipo de festa / DNA da referência).
+ */
+async function pickFontsFromImage(imageBuffer, fallback) {
+    if (!process.env.OPENAI_API_KEY) return fallback;
+    try {
+        const OpenAI = require('openai');
+        const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
+        const jpg = await sharp(imageBuffer).resize(768, 768, { fit: 'inside' }).jpeg({ quality: 80 }).toBuffer();
+        const list = (arr) => arr.map(f => `- ${f.family}: ${f.desc}`).join('\n');
+        const r = await openai.chat.completions.create({
+            model: 'gpt-4o',
+            messages: [{ role: 'user', content: [
+                { type: 'text', text: `Look at this party invitation. Pick the fonts from the lists that best match its typography.
+MAIN: the font whose letter shapes are closest to the BIG TITLE lettering (the child's name).
+COMPLEMENTARY: the font closest to the smaller secondary text (phrase, date, address).
+Choose ONLY from these lists, copying the family name exactly.
+MAIN options:
+${list(FONT_CATALOG.main)}
+COMPLEMENTARY options:
+${list(FONT_CATALOG.complementary)}
+Return JSON: {"main": "<family>", "complementary": "<family>"}` },
+                { type: 'image_url', image_url: { url: `data:image/jpeg;base64,${jpg.toString('base64')}`, detail: 'high' } },
+            ] }],
+            max_tokens: 80,
+            temperature: 0,
+            response_format: { type: 'json_object' },
+        });
+        const pick = JSON.parse(r.choices[0].message.content);
+        const main = FONT_CATALOG.main.find(f => f.family === pick.main);
+        const comp = FONT_CATALOG.complementary.find(f => f.family === pick.complementary);
+        if (!main || !comp) return fallback;
+        console.log(`[Identity] Fontes escolhidas pela imagem: ${main.family} + ${comp.family}`);
+        return { style: 'image', main, complementary: comp, googleFontsUrl: googleFontsUrlFor([main, comp]) };
+    } catch (e) {
+        console.warn('[Identity] Não foi possível escolher fontes pela imagem; usando o par padrão:', e.message);
+        return fallback;
+    }
+}
+
 /**
  * Monta a identidade visual completa da festa a partir da arte do convite.
  */
 async function buildIdentity(project, imageBuffer, dna = null) {
-    const [palette] = await Promise.all([extractPalette(imageBuffer, project.type)]);
+    const [palette, fonts] = await Promise.all([
+        extractPalette(imageBuffer, project.type),
+        pickFontsFromImage(imageBuffer, pickFonts(project.type, dna)),
+    ]);
     return {
         palette,                        // [primária, secundária, destaque, clara, escura]
-        fonts: pickFonts(project.type, dna),
+        fonts,                          // par de fontes mais parecido com o título do convite
         initial: (project.name || '?').trim().charAt(0).toUpperCase(),
         year: (() => {
             const m = String(project.date || '').match(/(\d{4})\s*$/);
@@ -173,4 +261,4 @@ async function buildIdentity(project, imageBuffer, dna = null) {
     };
 }
 
-module.exports = { buildIdentity, extractPalette, pickFonts, FONT_PAIRS };
+module.exports = { buildIdentity, extractPalette, pickFonts, pickFontsFromImage, FONT_PAIRS, FONT_CATALOG };

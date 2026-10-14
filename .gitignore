@@ -23,3 +23,7 @@ Thumbs.db
 # Arquivos temporários gerados
 server/tmp/
 server/uploads/
+
+# saídas do teste do Gemini (podem conter fotos de crianças)
+server/test-output-gemini/
+server/test-output-kit/

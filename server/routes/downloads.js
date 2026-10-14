@@ -12,7 +12,7 @@ const archiver = require('archiver');
 const axios    = require('axios');
 
 const { supabaseAdmin }                       = require('../services/supabase');
-const { renderConvite, renderLembrete, pngToPdf } = require('../services/renderer');
+const { renderConvite, renderLembrete, renderNativeArt, pngToPdf } = require('../services/renderer');
 const { uploadBuffer, downloadBuffer }        = require('../services/storage');
 const { requireAuth, optionalAuth }           = require('../middleware/auth');
 
@@ -49,6 +49,19 @@ async function isProjectUnlocked(projectId, userId, bypassPayment = false) {
         return profile?.user_type === 'pro';
     }
     return false;
+}
+
+/** Lembrete gerado pela IA (arte própria no estilo do convite), se existir */
+async function getGeneratedLembrete(project) {
+    const url = project.assets_urls?.lembrete;
+    if (!url) return null;
+    try {
+        const resp = await axios.get(url, { responseType: 'arraybuffer', timeout: 20000 });
+        return Buffer.from(resp.data);
+    } catch (e) {
+        console.warn('[Downloads] Falha ao baixar o lembrete gerado:', e.message);
+        return null;
+    }
 }
 
 /** Carrega buffer de fundo: da URL gerada por IA ou do asset local padrão */
@@ -148,7 +161,8 @@ router.get('/:projectId/lembrete.png', optionalAuth, async (req, res) => {
         const unlocked      = await isProjectUnlocked(project.id, req.user?.id, process.env.NODE_ENV === 'development');
         const withWatermark = !unlocked;
         const bgBuffer      = await getBgBuffer(project);
-        const lembretePng   = await renderLembrete(project, bgBuffer, withWatermark);
+        const generated     = await getGeneratedLembrete(project);
+        const lembretePng   = generated ? await renderNativeArt(generated, withWatermark) : await renderLembrete(project, bgBuffer, withWatermark);
 
         res.set({
             'Content-Type':        'image/png',
@@ -185,9 +199,10 @@ router.get('/:projectId/kit.zip', optionalAuth, async (req, res) => {
         console.log(`[Downloads/ZIP] Gerando kit para "${project.name}"...`);
 
         // Renderiza convite e lembrete em alta resolução SEM marca d'água
+        const generatedLembrete = await getGeneratedLembrete(project);
         const [convitePng, lembretePng] = await Promise.all([
             renderConvite(project, bgBuffer, false),
-            renderLembrete(project, bgBuffer, false),
+            generatedLembrete ? Promise.resolve(generatedLembrete) : renderLembrete(project, bgBuffer, false),
         ]);
         const convitePdf = await pngToPdf(convitePng);
 
@@ -211,8 +226,11 @@ router.get('/:projectId/kit.zip', optionalAuth, async (req, res) => {
         const aiFiles  = [
             { key: 'mascote',   name: '03_Mascote_Oficial.png'           },
             { key: 'elementos', name: '04_Prancha_Elementos.png'          },
-            { key: 'fundo',     name: '08_Fundo_Personalizado_Limpo.png'  },
+            { key: 'fundo',     name: '07_Fundo_Personalizado_Limpo.png'  },
+            { key: 'lembrancinha', name: '08_Lembrancinha_Obrigado.png'     },
             { key: 'papel',     name: '09_Papel_Digital_Estampado.png'    },
+            { key: 'logo',      name: '10_Logotipo_da_Festa.png'          },
+            { key: 'brasao',    name: '11_Brasao_da_Aniversariante.png'   },
         ];
 
         for (const { key, name } of aiFiles) {
@@ -222,6 +240,24 @@ router.get('/:projectId/kit.zip', optionalAuth, async (req, res) => {
                     archive.append(Buffer.from(resp.data), { name });
                 } catch (dlErr) {
                     console.warn(`[ZIP] Falha ao incluir ${name}:`, dlErr.message);
+                }
+            }
+        }
+
+        // --- Recortes do kit (elementos principais e complementares) ---
+        const kitFiles = aiAssets.kit_files || {};
+        const kitGroups = [
+            ['principais',     '05_Elementos_Principais/Elemento'],
+            ['complementares', '06_Elementos_Complementares/Elemento'],
+        ];
+        for (const [group, base] of kitGroups) {
+            const list = kitFiles[group] || [];
+            for (let i = 0; i < list.length; i++) {
+                try {
+                    const resp = await axios.get(list[i], { responseType: 'arraybuffer', timeout: 20000 });
+                    archive.append(Buffer.from(resp.data), { name: `${base}_${String(i + 1).padStart(2, '0')}.png` });
+                } catch (dlErr) {
+                    console.warn(`[ZIP] Falha ao incluir ${base}_${i + 1}:`, dlErr.message);
                 }
             }
         }
@@ -238,13 +274,18 @@ ITENS DO KIT:
 02. Lembrete da Festa / Card RSVP (PNG)
 03. Mascote Oficial da Aniversariante (PNG)
 04. Prancha Geral de Elementos Separados (PNG)
-08. Fundo Personalizado Limpo (PNG)
+05. Elementos Principais (PNG com fundo transparente, pasta 05)
+06. Elementos Complementares (PNG com fundo transparente, pasta 06)
+07. Fundo Personalizado Limpo (PNG)
+08. Arte para Lembrancinha (PNG quadrado, com agradecimento)
 09. Papel Digital Estampado (PNG)
+10. Logotipo da Festa (PNG com fundo transparente, mesmas letras do convite)
+11. Brasão da Aniversariante (PNG com fundo transparente)
 
 OBSERVAÇÕES:
 - Arquivos PNG em resolução A4 (2480×3508 px, 300 DPI) — prontos para impressão profissional
 - O arquivo PDF é ideal para envio a gráficas
-- Os itens 10–15 (Logo, Brasão, Monograma, Paleta e Tipografia) ficam no painel online
+- A paleta de cores fica no painel online
 
 Dúvidas? Contate: suporte@merakiartesdigitais.com.br
 `.trim();

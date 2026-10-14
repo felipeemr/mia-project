@@ -1383,12 +1383,12 @@ input:focus, textarea:focus, select:focus {
 .watermarked .watermark-pattern-layer { display: grid; }
 .unwatermarked .watermark-pattern-layer { display: none !important; }
 
-/* LEMBRETE DA FESTA (Vertical card 3:4 aspect ratio) */
+/* LEMBRETE DA FESTA: arte gerada pela IA, na mesma proporção 2:3 do convite (nada é cortado) */
 .reminder-container-mock {
     width: 100%;
     max-width: 400px;
     margin: 0 auto;
-    aspect-ratio: 3/4;
+    aspect-ratio: 2/3;
     border-radius: var(--border-radius-md);
     overflow: hidden;
     position: relative;
@@ -2486,4 +2486,14 @@ input:focus, textarea:focus, select:focus {
     .collage-deliveries-list {
         grid-template-columns: 1fr;
     }
+}
+
+
+/* Imagens do resultado: invisíveis até a imagem gerada terminar de carregar (nada de arte de exemplo piscando) */
+.result-img {
+    opacity: 0;
+    transition: opacity 0.4s ease;
+}
+.result-img.loaded {
+    opacity: 1;
 }

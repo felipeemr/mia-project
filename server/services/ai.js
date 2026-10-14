@@ -1,6 +1,8 @@
 /* =============================================================================
    MERAKI — Serviço de IA para Geração de Imagens
-   Provedor único: OpenAI (imagens via gpt-image / chatgpt-image-latest, visão via GPT-4o).
+   Imagem do convite: Google Gemini (principal, se GEMINI_API_KEY existir) com reserva na OpenAI
+   (gpt-image / chatgpt-image-latest). Visão e conferência de texto: OpenAI GPT-4o.
+   Troque o provedor com IMAGE_PROVIDER=gemini|openai no .env.
 
    AJUSTE DE SANITIZAÇÃO DE COPYRIGHT (vs. versão anterior):
    - Antes: sanitizePromptForDalle() só rodava no prompt do DALL-E, e sobre o
@@ -20,9 +22,17 @@
 const OpenAI = require('openai');
 const axios = require('axios');
 const sharp = require('sharp');
+const { generateWithGemini } = require('./gemini');
 
 // Qualidade das imagens do convite: SEMPRE 'medium' (decisão do produto, custo ~4x menor que 'high').
 const POSTER_IMAGE_QUALITY = 'medium';
+
+// Provedor da arte do convite: 'gemini' (padrão se houver GEMINI_API_KEY) ou 'openai'
+const posterProvider = () => (process.env.IMAGE_PROVIDER || (process.env.GEMINI_API_KEY ? 'gemini' : 'openai')).toLowerCase();
+// Modelos do Gemini em ordem de preferência (o 1º é o principal)
+const geminiModels = () => (process.env.GEMINI_POSTER_MODELS || 'gemini-3-pro-image,gemini-3.1-flash-image-preview').split(',').map(s => s.trim()).filter(Boolean);
+// Tempo máximo (ms) do Gemini por tentativa antes de usar a reserva da OpenAI
+const GEMINI_BUDGET_MS = 130000;
 
 // Função utilitária para delay (evita rate limits)
 const delay = ms => new Promise(resolve => setTimeout(resolve, ms));
@@ -206,6 +216,7 @@ Ensure valid JSON output without markdown blocks.`
                 }
             ],
             max_tokens: 300,
+            temperature: 0,
             response_format: { type: 'json_object' }
         });
         const content = response.choices[0]?.message?.content?.trim();
@@ -333,6 +344,10 @@ async function verifyPosterText(imageUrl, textLines) {
         const read = normalizeTxt((parsed.lines || []).join(' '));
         const missing = [];
         if (parsed.cut_off === true) missing.push('TEXTO CORTADO NA BORDA');
+        // Texto extra: palavras lidas na arte que não fazem parte dos textos pedidos (efeitos sonoros, letreiros)
+        const requiredWords = new Set(normalizeTxt(textLines.map(l => l.text).join(' ')).split(' '));
+        const extraWords = [...new Set(read.split(' '))].filter(w => w.length >= 4 && !requiredWords.has(w));
+        if (extraWords.length) missing.push('TEXTO EXTRA: ' + extraWords.slice(0, 5).join(' '));
         for (const l of textLines) {
             let ok;
             if (l.key === 'location' || l.key === 'phrase') {
@@ -344,6 +359,15 @@ async function verifyPosterText(imageUrl, textLines) {
                 ok = read.includes(normalizeTxt(l.text).replace(/ /g, '')) || read.includes(normalizeTxt(l.text));
             } else {
                 ok = read.includes(normalizeTxt(l.text));
+            }
+            // Acentos: a comparação acima ignora acentos de propósito (a IA pode errar a caixa/forma),
+            // mas em português "AMERICAS" no lugar de "AMÉRICAS" é erro. Palavras acentuadas pedidas
+            // precisam aparecer com o acento na transcrição.
+            if (ok) {
+                const rawRead = (parsed.lines || []).join(' ').toLowerCase().normalize('NFC');
+                const accented = (l.text.match(/[\p{L}]*[áàâãäéèêëíìîïóòôõöúùûüç][\p{L}]*/giu) || []);
+                const lost = accented.filter(w => !rawRead.includes(w.toLowerCase().normalize('NFC')));
+                if (lost.length) { ok = false; missing.push(`${l.text} (acentuação: ${lost.join(', ')})`); continue; }
             }
             if (!ok) missing.push(l.text);
         }
@@ -448,10 +472,70 @@ async function generateKitImages(projectData, childPhotos = [], inspirationRefs 
         ${textLines.map((l, i) => `${i + 1}. ${l.role}: "${l.text}"${l.spell ? ` (spelled letter by letter: ${l.spell})` : ''}`).join('\n        ')}
         LAYOUT: the child's name in massive 3D themed lettering integrated into the scene at the top/upper-middle; the age large right below it; the invitation phrase as a stylish themed ribbon/banner/speech-bubble between the character and the bottom sign, easy to read; the date, time and address together as clean, highly legible lettering on a themed decorative sign/banner/plaque that belongs to the scene, placed in the lower part of the image but ending at roughly 90% of the image height at most (never at the very bottom). SAFE ZONE (very important): keep an empty margin of at least 8% of the image height above the top of the title, at least 8% of the image height BELOW the last line of text at the bottom (the address is the lowest text: the bottom sign must end well above the bottom edge, with decorative scenery visible beneath it), and at least 8% of the image width on the left and right of every text; the child's name must span at most 75% of the image width (use smaller letters or two lines if the name is long); no text may touch or cross any edge of the image, and no letter may be cropped. Every word must be fully visible, never cut off, high contrast against its background.`;
 
+    // Prompt do Gemini: mesma ideia do da OpenAI, mais rico (cena em camadas, rosto em destaque).
+    // A foto da criança vai como imagem; as referências entram só como texto (paleta e cenário).
+    const buildGeminiPrompt = (themeLabel, hasPhoto, hasRefs = false) => {
+        const desc = hasPhoto && childFeatures ? childFeatures.split(/,\s*(?:wearing|dressed)/i)[0].trim() : null;
+        const preface = hasPhoto
+            ? "INPUT IMAGE: the photo of the birthday child. The main character MUST be a semi-realistic children's book illustration (NOT hyper-realistic, NOT a generic cartoon kid) of THIS EXACT child, so that his/her family instantly recognizes him/her. Faithfully reproduce the real face: face shape and proportions, forehead, eyes (shape, spacing, color), eyebrows, nose, mouth and smile, cheeks, ears, jawline, skin tone, and especially the hair color, length, texture and hairstyle exactly as in the photo (do not straighten, shorten or restyle the hair). " +
+              (desc ? `Reference description of the features: ${desc}. ` : '') +
+              "Keep any distinctive traits such as dimples, freckles or a particular smile. Do NOT copy the clothing or the background of the photo. IGNORE any text, numbers, candles or logos visible in the photo.\n\n"
+            : '';
+        // Como usar as imagens de referência (ex.: foto de decoração de festa ou capa com personagens)
+        const refBlock = hasRefs
+            ? `THEME REFERENCE IMAGE(S): ${hasPhoto ? 'the other input image(s) are' : 'the input image(s) are'} theme references (for example a photo of a party decoration or a poster with characters). Take from them ONLY: (1) the exact color palette and color combinations, (2) the artistic style of the character artwork and the mood of the backdrop art, and (3) the OUTFIT STYLE of the characters shown (clothing shapes, patterns, color blocking, hair accents, accessories): dress the birthday child in an outfit INSPIRED by those characters' outfits, with the same color scheme and details, adapted to the child. Do NOT reproduce the physical party setup: no balloon arches or garlands, tables, pedestals, cakes, cupcakes, dolls, neon signs, furniture, floors or photographed panels. Do NOT copy any text or logo from the references. The birthday child stays the only character in the poster.
+
+`
+            : '';
+        const world = `Create a single, unique, spectacular, richly detailed illustrated party invitation poster (vertical 2:3, full-bleed art, no white margins, no white boxes).
+
+THEME AND WORLD: ${themeLabel}. ${hasRefs ? '' : `Scenery: ${JSON.stringify(inspirationDna?.scenery || 'highly detailed thematic landscape')}. `}Color palette: ${JSON.stringify(inspirationDna?.palette || 'vibrant colors')}. Build a rich, layered scene with a clear foreground, midground and background, dramatic lighting and depth. Fill the scene with many theme-related details: iconic decorations, glowing effects, and themed patterns in the corners. The birthday child is the ONLY character in the poster: do NOT add any companion characters, sidekicks, creatures, robots, mini heroes, flying figures or mascots, anywhere in the scene. Use the theme's materials for the large title lettering (for example stone, neon, web threads, metal or wood, according to the theme) so the lettering feels part of the world.
+
+MAIN CHARACTER: the birthday child is the clear hero of the poster, large and centered, with the face big and clearly visible (head and shoulders prominent, face turned toward the viewer, bright expressive happy smile, eyes looking at the viewer, NO goggles or glasses covering the eyes). Dress the child in a fun party-theme outfit in the theme's colors with 1-2 simple accessories on the body (for example a cap, a backpack or a cape), in a joyful dynamic action pose. The hands must be empty and expressive (open hand, waving, a thumbs-up or a relaxed pointing pose): NO gadgets, NO launchers, NO weapons, NO glowing devices or gauntlets, NO objects held in the hands. Draw the character with delicate, gentle, hand-drawn childlike line work and soft shading in the same illustrated style as the scenery. Every emblem and symbol must be an original invention.
+
+STYLE: vibrant illustrated storybook-cover look with rich saturated colors, clean outlines, subtle texture and a polished professional finish (NOT a 3D render, NOT photorealistic).`;
+        const text = `
+
+TEXT RULES (the language of ALL text in the image is BRAZILIAN PORTUGUESE, not English):
+Render ONLY the following text lines, exactly as written, character by character, keeping every accent (Á É Í Ó Ú Â Ê Ô Ã Õ Ç) and number. Do not translate, do not invent, do not misspell, do not add any other words, sound effects (no "POW", "ZAP", "BOOM" or similar), signs, readable street lettering, watermarks or signatures anywhere in the scene.
+${textLines.map((l, i) => `${i + 1}. ${l.role}: "${l.text}"${l.spell ? ` (spelled letter by letter: ${l.spell})` : ''}`).join('\n')}
+LAYOUT: the child's name in massive themed lettering at the top/upper-middle; the age large right below it; the invitation phrase as a stylish themed ribbon/banner between the character and the bottom sign; the date, time and address together as clean, highly legible lettering on a themed decorative sign in the lower part of the image, with a small calendar icon beside the date, a small clock icon beside the time and a small location pin beside the address, ending at roughly 90% of the image height at most. SAFE ZONE: keep at least 8% empty margin above the title, at least 8% of the image height below the last line of text, and at least 8% of the width on the left and right; the child's name must span at most 75% of the image width; no text may touch or cross any edge and no letter may be cropped.`;
+        return preface + refBlock + world + text;
+    };
+
     let editUnavailable = false; // true se a conta não tem acesso ao modelo de edição (403)
+    let geminiDown = false;      // true se o Gemini ficou sem cota/chave: usa só a reserva (OpenAI)
+    const geminiPrimary = posterProvider() === 'gemini' && !!process.env.GEMINI_API_KEY;
     let sendRefs = true;         // false depois de uma recusa: mantém a foto da criança, tira as referências
     const generatePoster = async (themeLabel, useChild = true) => {
         const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
+
+        // PROVEDOR PRINCIPAL: Gemini. Se falhar por sobrecarga/cota/chave, cai na OpenAI (abaixo).
+        // Se o filtro de segurança recusar, repassa o erro para a escada de tentativas.
+        if (geminiPrimary && !geminiDown) {
+            const hasPhoto = useChild && !!childPhotos?.[0]?.buffer;
+            const refBuffers = (sendRefs ? (inspirationRefs || []) : []).filter(r => r?.buffer).slice(0, 2).map(r => r.buffer);
+            const gPrompt = buildGeminiPrompt(themeLabel, hasPhoto, refBuffers.length > 0);
+            console.log(`[AI/Gemini] Prompt (tema ${themeLabel === activeThemeLabel ? 'fiel' : 'alternativo'}, foto da criança ${hasPhoto ? 'SIM' : 'NÃO'}):\n${gPrompt}`);
+            try {
+                const g = await generateWithGemini({
+                    prompt: gPrompt,
+                    photoBuffer: hasPhoto ? childPhotos[0].buffer : null,
+                    refBuffers,
+                    models: geminiModels(),
+                    deadlineAt: Date.now() + GEMINI_BUDGET_MS,
+                });
+                return g.dataUrl;
+            } catch (e) {
+                if (e.kind === 'safety') {
+                    const err = new Error(`Gemini recusou por segurança: ${e.message}`);
+                    err.status = 400;
+                    throw err;
+                }
+                if (e.kind === 'quota' || e.kind === 'config') geminiDown = true;
+                console.warn(`[AI/Gemini] Indisponível (${e.kind || 'erro'}): ${e.message}. Usando a OpenAI como reserva.`);
+            }
+        }
 
         // MODO FOTO: envia a foto real da criança (+ referências) ao modelo de imagem,
         // em vez de uma descrição em texto — é isso que dá semelhança fiel no rosto.
@@ -522,7 +606,14 @@ ${prompt}`);
     let themeForPoster = activeThemeLabel;
     let refusals = 0;
     let useChildFeatures = true;
+    const loopStart = Date.now();
+    let generated = 0; // imagens geradas e conferidas (cada uma custa)
     for (let attempt = 1; attempt <= MAX_ATTEMPTS; attempt++) {
+        // Já tem uma arte e o tempo está acabando: usa a melhor (o frontend espera no máximo ~7 min)
+        if (best.url && Date.now() - loopStart > 170000) {
+            console.warn('[AI] Prazo de geração atingido; usando a melhor arte obtida.');
+            break;
+        }
         let url = null;
         try {
             url = await generatePoster(themeForPoster, useChildFeatures);
@@ -539,9 +630,9 @@ ${prompt}`);
                 throw new Error(`OpenAI indisponível (${e.status || 'erro'}): ${e.message}`);
             }
             // 1º degrau da escada: recusou com foto + referências -> tenta só com a foto (mantém o rosto)
-            if (sendRefs && useChildFeatures && !editUnavailable && childPhotos?.[0]?.buffer && (inspirationRefs || []).some(r => r?.buffer)) {
+            if (sendRefs && useChildFeatures && !editUnavailable && (geminiPrimary || childPhotos?.[0]?.buffer) && (inspirationRefs || []).some(r => r?.buffer)) {
                 sendRefs = false;
-                console.warn('[AI/GPT-Image] Recusado com referências. Refazendo só com a foto da criança (sem enviar as referências).');
+                console.warn('[AI] Recusado com as imagens de referência. Refazendo só com a foto da criança (sem enviar as referências).');
                 continue;
             }
             // Recusa do filtro de segurança: afasta o tema do original a cada vez
@@ -564,6 +655,11 @@ ${prompt}`);
         console.log(`[AI/Verify] Tentativa ${attempt}: ${check.passed}/${check.total} textos corretos`, check.missing.length ? `— faltando/errado: ${check.missing.join(' | ')}` : '');
         if (check.passed > best.score) best = { url, score: check.passed };
         if (check.ok) break;
+        generated++;
+        if (generated >= 2) {
+            console.warn('[AI] Limite de 2 gerações conferidas atingido; usando a melhor arte (controle de custo).');
+            break;
+        }
     }
     if (!best.url) {
         throw new Error('Não foi possível gerar o convite (a IA recusou ou falhou em todas as tentativas).');
@@ -661,4 +757,4 @@ ${prompt}`);
 
 
 
-module.exports = { generateImage, generateKitImages, getPromptsForProject };
+module.exports = { generateImage, generateKitImages, getPromptsForProject, buildTextLines, verifyPosterText, analyzeChildPhoto, formatDatePt, formatTimePt };

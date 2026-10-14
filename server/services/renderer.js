@@ -542,6 +542,7 @@ async function createThumbnail(pngBuffer, width = 600) {
 }
 
 module.exports = {
+    renderNativeArt,
     renderConvite,
     renderLembrete,
     pngToPdf,
