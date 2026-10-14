@@ -1,444 +1,202 @@
 # AI HANDOFF — Meraki Artes Digitais (Plataforma Web de Identidade Visual para Festas com IA)
 
-> **DOCUMENTO DE TRANSIÇÃO TÉCNICA E TRANSFERÊNCIA DE CONTEXTO**  
-> **Destinado a:** Nova Inteligência Artificial / Desenvolvedor(a) assumindo a evolução da plataforma.  
-> **Data de Atualização:** Setembro de 2026  
-> **Versão do Protótipo/Fase:** Fase 2 em Implementação (Backend Node.js + Supabase + Pipeline de IA)
-
+> **Documento de continuidade do projeto.** Quem for retomar (pessoa ou IA) deve ler este arquivo antes de mexer em qualquer coisa.
+> **Última atualização:** 13/10/2026 · **Branch de trabalho:** `feat/kit-completo-gemini` (a `main` do GitHub ainda não tem este trabalho até o PR ser aceito).
 
 ---
 
 ## 1. Resumo do projeto
 
-A **Plataforma Meraki Artes Digitais** é um aplicativo web online (Single Page Application - SPA), responsivo e mobile-first, voltado para a criação e geração automática de **Identidades Visuais Completas para Festas** utilizando inteligência artificial.
+Aplicativo web (SPA, mobile-first) que gera a **identidade visual completa de uma festa** com IA: convite, lembrete, mascote com o rosto da criança, elementos, fundo, papel digital, logotipo, brasão, lembrancinha e paleta. A cliente preenche os dados, envia **1 foto** da criança e (opcional) referências de tema, vê o kit com **marca d'água** e, depois de pagar, baixa os arquivos limpos (PNG, PDF e ZIP).
 
-### Problema que Resolve
-Normalmente, a criação de uma papelaria de festa completa (convites, lembretes, monogramas, brasões, papéis digitais e mascotes) exige a contratação de uma designer por semanas ou a compra de kits genéricos pré-prontos. A plataforma Meraki resolve isso permitindo que mães, aniversariantes ou conviteiras profissionais gerem um kit completo de 15 peças delicadas em estilo aquarela em poucos minutos.
-
-### Objetivos do Produto
-1. **Público Cliente Final (Mães, Aniversariantes, Família):** Acessar a plataforma, preencher dados básicos e gerar um kit visual com marca d'água para prévia. Caso aprove, realiza o pagamento do kit individual e desbloqueia os downloads limpos em alta resolução (PNG, PDF e ZIP).
-2. **Público Profissional (Conviteiras e Designers de Festas):** Assinar um plano mensal (via Kiwify) para ter um painel exclusivo (Portal da Conviteira), com limite diário/mensal de gerações sem marca d'água, permitindo criar e salvar múltiplos projetos para suas clientes.
-3. **Escopo de Eventos no Lançamento:**
-   - Aniversário Infantil (Mascotes infantis, aquarela delicada, dados de criança).
-   - 15 Anos / Debutante (Coroas, monogramas sofisticados, realeza).
-   - Aniversário Adulto (Eucalipto, ramos, arranjos secos e florais minimalistas).
-   - *(Casamentos fora do escopo inicial)*.
+- **Público final:** mães e aniversariantes. Até 1 geração + 1 regeneração grátis, com marca d'água. Pagamento avulso (R$ 47,90 por kit) libera os downloads.
+- **Profissional (conviteira):** assinatura mensal (R$ 89,90), limites de 6 gerações/dia e 60/mês.
+- **Eventos:** Infantil, 15 Anos (debutante) e Adulto.
 
 ---
 
-## 2. Estado atual
+## 2. Estado atual (13/10/2026)
 
-* **Fase 1 (Protótipo Visual Navegável SPA):** `[IMPLEMENTADO]`  
-  Interface 100% navegável construída com HTML5, CSS3 puro (Design System customizado com tokens de marca) e JavaScript Vanilla.
-* **Exposição dos 15 Itens:** `[IMPLEMENTADO]`  
-  A tela de prévia exibe a totalidade dos 15 itens do kit em uma única galeria vertical contínua com rolagem suave (Smooth Scroll) guiada por abas âncoras.
-* **Identidade Visual e Mascotes:** `[IMPLEMENTADO]`  
-  Identidade da assistente visual **Mia** integrada por toda a interface (Landing page, Loader animado, Modal de desbloqueio). Fontes oficiais (*Playfair Display*, *Poppins*, *Great Vibes*, *Sacramento*) integradas via Google Fonts.
-* **Layout dos Convites e Lembretes:** `[IMPLEMENTADO]`  
-  Textos dinâmicos formatados em layout retrato no topo em área em branco para evitar qualquer sobreposição com o rodapé desenhado (personagens aquarelados em PNG/JPG). O lembrete de WhatsApp compartilha exatamente o mesmo fundo e estética do convite.
-* **Bypass & Ferramentas de Desenvolvedor:** `[IMPLEMENTADO]`  
-  Painel flutuante de testes (FAB `🛠️`) para alternância instantânea entre as 10 telas e preenchimento automático de dados mock (Helena 5 anos, Giovanna 15 anos, Carolina 40 anos). Modo de bypass de limites e pagamentos ativo no script para homologação imediata.
-
-### Fase 2 — Estado (Setembro 2026)
-* **Camada de API no Frontend (`app.js`):** `[IMPLEMENTADO]`  
-  Funções `apiCall`, `apiGenerateKit`, `applyRealAssets`, `apiLogin/Logout` adicionadas no topo do `app.js`. O frontend tenta o backend real (porta 3001) e cai automaticamente em modo mock se offline.
-* **Backend Node.js/Express (`server/`):** `[IMPLEMENTADO - AGUARDA CONFIGURAÇÃO]`  
-  Estrutura completa criada com rotas, serviços e middleware. Requer instalação do Node.js e configuração das chaves no `.env`.
-* **Banco de Dados Supabase:** `[AGUARDA CONFIGURAÇÃO]`  
-  Schema SQL criado em `server/migrations/001_initial_schema.sql`. Requer criação do projeto no Supabase e execução do script.
-* **Pipeline de IA (Replicate/OpenAI):** `[IMPLEMENTADO - AGUARDA API KEY]`  
-  Serviço `server/services/ai.js` com prompts calibrados para aquarela. Detecta automaticamente `REPLICATE_API_TOKEN` ou `OPENAI_API_KEY`.
-* **Renderizador 300 DPI (Sharp):** `[IMPLEMENTADO]`  
-  `server/services/renderer.js` gera convite e lembrete em 2480×3508px com textos SVG, respeitando `padding-bottom: 32%`.
-* **Downloads ZIP:** `[IMPLEMENTADO]`  
-  `server/routes/downloads.js` gera PNG, PDF e kit.zip completo com todos os 15 itens.
-* **Integração Real de Pagamento (Fase 3):** `[PENDENTE / PLANEJADO]`  
-  Rotas preparadas. Webhook Kiwify/Mercado Pago a implementar na Fase 3.
+| Parte | Estado |
+|---|---|
+| Frontend SPA (HTML/CSS/JS puro, 10 telas) | Implementado |
+| Backend Node/Express + Supabase (banco + storage) | Implementado e rodando |
+| Convite: arte única da IA com todos os textos em pt-BR, conferida por visão | Implementado |
+| Provedor de imagem: **Gemini (principal)** + OpenAI (reserva) | Implementado |
+| Kit de **12 itens** gerado a partir do convite | Implementado, **testado item a item; falta teste completo pelo site** |
+| Paleta extraída do convite | Implementado |
+| Pagamento real (Kiwify / Mercado Pago) | **Não implementado** (checkout é simulado; `NODE_ENV=development` libera downloads) |
+| Downloads PNG/PDF/ZIP | Implementado no servidor; tela de downloads ainda aponta para exemplos |
+| Testes automatizados | Não existem (só scripts manuais `server/test-*.js`) |
 
 ---
 
-## 3. Histórico e contexto
+## 3. Como a geração funciona (fluxo de `POST /api/generate`)
 
-O projeto foi concebido a partir da marca **Meraki Artes Digitais**. A usuária/proprietária da marca solicitou expressamente:
-1. **Foco Mobile-First:** O uso predominante será via dispositivos móveis (smartphones). O fluxo de formulário em 3 etapas, upload de fotos e visualização das artes foram rigorosamente otimizados para telas pequenas.
-2. **Estética Exclusiva (Sem "Cara de IA Plástica"):** Artes delicadas, tons aquarelados, traços manuais e papelaria refinada. A assistente **Mia** (uma personagem amigável de cabelos turquesa e blusa rosa) orienta o usuário em toda a jornada.
-3. **Reformulação do Convite e Lembrete:** Durante o desenvolvimento, o convite e o lembrete apresentavam textos cobrindo as ilustrações do rodapé. Foi implementada uma estrutura com `flex-start` e `padding-bottom: 32%` para garantir que as informações (nome, idade, data, local e frase) flutuem livremente na parte superior limpa da arte.
-4. **Visualização Completa com Marca d'Água:** O cliente exige ver a prévia de **todos os 15 itens** com marca d'água protetora antes de ser direcionado para o checkout.
+1. O formulário envia dados, **1 foto** da criança, referências opcionais e **menino/menina**.
+2. O servidor tenta salvar o projeto no Supabase (`projects`) e cria uma **pasta única** no storage (`projects/<id ou tmp-...>/`).
+3. **Convite** (`services/ai.js`): análise da foto (GPT-4o) e das referências (até 3, GPT-4o) → tema "sanitizado" (só a atmosfera, sem nomes de personagens) → prompt → **Gemini** (`gemini-3-pro-image`, depois `gemini-3.1-flash-image-preview`) com a foto (e as referências como imagem) → **conferência por visão (GPT-4o)**: nome, idade, data, horário, endereço e frase corretos, **acentos**, texto cortado nas bordas e **texto extra**. Reprovou: gera de novo (máx. 2 gerações conferidas, prazo de ~170 s).
+4. Se o Gemini estiver sobrecarregado/sem cota/sem chave, cai na **OpenAI** (`chatgpt-image-latest`, edição com foto). Se o filtro de segurança recusar, desce a escada: sem referências → sem foto → tema "original" → genérico.
+5. **Identidade** (`services/identity.js`): paleta de 5 cores extraída do convite (agrupamento por matiz) e par de fontes escolhido pela imagem (usado só como reserva visual; a tela de tipografia foi removida).
+6. **Itens do kit** (`services/kit.js`), usando o **convite aprovado como referência de estilo**, em paralelo (7 chamadas de IA): mascote, prancha de elementos, fundo limpo, logotipo, brasão, lembrete e agradecimento. Depois, por código: recorte da prancha, papel digital e lembrancinha.
+7. Resposta ao navegador com as URLs; o navegador aplica tudo **antes** de mostrar a tela de resultado (nenhuma arte de exemplo pisca).
 
----
+### Os 12 itens do kit
 
-## 4. Objetivos originais
+| # | Item | Como é feito | IA? |
+|---|---|---|---|
+| 01 | Convite principal | Gemini (foto + referências), texto pt-BR conferido | Sim |
+| 02 | Lembrete (contagem regressiva, 2:3) | Gemini com o convite de referência; "FALTAM X DIAS" (máx. 5), nome, data, horário, endereço | Sim |
+| 03 | Mascote oficial | Gemini com foto + convite; mesma personagem do convite, fundo branco | Sim |
+| 04 | Prancha de elementos | Gemini, ~12 adesivos do tema | Sim |
+| 05 | Elementos principais | Recorte da prancha (4 maiores), PNG transparente | Não |
+| 06 | Elementos complementares | Recorte da prancha (o resto), PNG transparente | Não |
+| 07 | Fundo personalizado limpo | Gemini, mesmo cenário sem personagem e sem texto | Sim |
+| 08 | Arte para lembrancinha (quadrada) | Fundo recortado + logotipo + "Obrigado/Obrigada pela sua presença" (agradecimento gerado) | 1 chamada |
+| 09 | Papel digital estampado | Montado por código com os elementos recortados + cor clara da paleta | Não |
+| 10 | Logotipo da festa | Gemini: nome + idade com as letras do título do convite, fundo transparente | Sim |
+| 11 | Brasão da aniversariante | Gemini: emblema do tema com a inicial | Sim |
+| 12 | Paleta de cores | Extraída do convite | Não |
 
-| Requisito Original | Estado Atual | Observações |
-|---|---|---|
-| Plataforma web responsiva (mobile e desktop) | `[IMPLEMENTADO]` | Sem containers simulados de celular; layout 100% fluído |
-| Mascot/Assistente Mia integrada | `[IMPLEMENTADO]` | Presente no Hero, Loader, Modais e Rodapés |
-| Suporte a Infantil, 15 Anos e Adulto | `[IMPLEMENTADO]` | Alternância funcional no formulário com preenchimento rápido |
-| Gerar 15 itens da papelaria em peças separadas | `[PARCIAL]` | Exibidos isoladamente no protótipo frontend; falta API de corte/IA |
-| Preenchimento automático do convite e lembrete | `[IMPLEMENTADO]` | Convite em formato retrato e lembrete RSVP alinhados |
-| Marca d'água protetora em prévias | `[IMPLEMENTADO]` | Banner explicativo e padrão repetição CSS sobre as artes |
-| Painel da Conviteira (Profissional) com limites | `[IMPLEMENTADO]` | Telas de planos, login, dashboard e estatísticas mockadas |
-| Integração com APIs de IA (Midjourney/Flux/SD/OpenAI) | `[PLANEJADO]` | Previsto para a Fase 3 |
-| Pagamento PIX e Cartão via Kiwify | `[PLANEJADO]` | Telas mockadas; webhook e checkout real previstos para a Fase 4 |
-
----
-
-## 5. Funcionalidades concluídas
-
-1. **Header Responsivo Global:** Navegação desktop e drawer mobile hambúrguer com transição suave.
-2. **Landing Page de Alta Conversão (`#view-home`):**
-   - Apresentação da Mia e proposta de valor.
-   - Badges detalhando os 15 itens entregues no kit.
-   - Timeline passo a passo de como funciona.
-   - Vitrine de estilos sugeridos e amostragem de paletas e tipografias.
-3. **Formulário Dinâmico em 3 Passos (`#view-generator`):**
-   - Passo 1: Escolha do evento (Infantil, 15 Anos, Adulto).
-   - Passo 2: Preenchimento de Nome, Idade, Data, Horário, Local, Tema e Frase do Convite.
-   - Passo 3: Uploads simulados de 2 fotos da aniversariante, referências visuais e observações.
-4. **Tela de Carregamento Mágico (`#view-generating`):**
-   - Loader animado com a imagem da Mia.
-   - Barra de progresso percentual dinâmica e troca sequencial de status e dicas.
-5. **Galeria de Resultados com 15 Itens (`#view-result`):**
-   - Exposição vertical contínua dividida por 4 grupos (Destaques, Elementos, Papéis, Marca).
-   - Menu de abas superiores com rolagem suave (Smooth Scroll) até as seções.
-   - Sobposição de marca d'água CSS (`.watermarked`).
-   - Botões para "AMEI, QUERO MEU KIT" e "GERAR OUTRA OPÇÃO".
-6. **Fluxo de Checkout e Pagamento Simulado (`#view-checkout`):**
-   - Resumo do kit com exibição de valor dinâmico.
-   - Abas para PIX (com QR Code SVG e código copia e cola) e Cartão de Crédito.
-   - Botão de simulação de aprovação imediata.
-7. **Área de Downloads Liberados (`#view-download`):**
-   - Animação de celebração com a Mia.
-   - Links diretos para download de PNG, PDF e pacote ZIP de alta resolução.
-8. **Portal Profissional (`#view-pro-sales`, `#view-pro-login`, `#view-pro-dashboard`):**
-   - Página de vendas do Plano Conviteira Pró (R$ 89,90/mês).
-   - Login com e-mail/senha.
-   - Dashboard exibindo contadores de gerações (Hoje e Mês) e lista de projetos recentes.
-9. **Painel de Configuração Administrativa (`#view-admin`):**
-   - Ajuste dinâmico de preço do kit (R$ 47,90), limites grátis, limites diários/mensais da conviteira.
-   - Checkboxes de Bypass de Pagamento e Gerações Infinitas.
-   - Tabela de histórico do banco de dados simulado.
-10. **Painel Flutuante do Desenvolvedor (`dev-float-control-panel`):**
-    - Botão `🛠️` para transitar entre qualquer uma das 10 telas e aplicar dados de teste instantaneamente.
+Custo estimado por kit completo: **US$ 0,70 a 1,00** (convite no Pro ~US$ 0,13 por imagem + extras no Flash ~US$ 0,07); tempo: **2,5 a 6 minutos** (varia muito com a sobrecarga do Google). `KIT_EXTRAS=off` no `.env` desliga os extras.
 
 ---
 
-## 6. Funcionalidades em desenvolvimento
+## 4. Regras de negócio e decisões de produto
 
-* **Geração Modular de Elementos Separados:**  
-  `[PARCIAL]` O frontend já exibe o Brasão, Monograma, Mascote e Logo em contêineres individuais e limpos. A próxima IA deverá conectar esses contêineres aos outputs individuais que serão retornados pelos pipelines da API de IA.
-
----
-
-## 7. Funcionalidades pendentes
-
-1. **Backend & Autenticação Real (Node.js/Python/Supabase/Firebase):**  
-   Substituir o `localStorage` e o objeto `appState` por banco de dados real e autenticação JWT ou Supabase Auth.
-2. **Pipeline de Geração de Imagem com IA:**  
-   Integração com APIs de geração de imagens (ex: Replicate, Flux, Midjourney API, DALL-E 3 ou Stable Diffusion XL) usando prompts calibrados para estilo aquarela e papelaria.
-3. **Módulo de Renderização e Sobreposição de Tipografia (Canvas / Sharp / Canvas-Node):**  
-   Preenchimento dinâmico do nome, data e local no convite e no lembrete via backend/canvas para geração de PDFs e PNGs finais limpos em 300 DPI para impressão.
-4. **Remoção de Fundo (Background Removal):**  
-   Integração com APIs como `remove.bg` ou modelos rembg locais para extrair mascotes e elementos em PNG com fundo transparente.
-5. **Integração de Pagamento Real (Kiwify / Mercado Pago / Stripe):**  
-   Geração de QR Code PIX real via API e recepção de Webhooks para alteração do status do projeto para `paid`.
-6. **Empacotamento ZIP Automático:**  
-   Geração server-side de arquivo `.zip` contendo os 15 arquivos finais em alta resolução para download do usuário.
+- **Frase do convite:** sorteada pelo sistema entre frases curtas e genéricas por tipo de festa (`services/phrases.js`). O campo livre foi removido (menos erro de escrita e sem slogans de marcas).
+- **Menino/menina:** pergunta no formulário (debutante é sempre menina). Define "Obrigado"/"Obrigada". **Não é salvo no banco** (a tabela não tem a coluna).
+- **1 foto por criança** (formulário e servidor).
+- **Qualidade das imagens da OpenAI fixa em `medium`** (`POSTER_IMAGE_QUALITY` em `ai.js`).
+- **Convite sempre retrato 2:3**; prévia e PDF mantêm a proporção da arte (nada é cortado).
+- **Todos os itens precisam combinar com o convite** (mesmo estilo, cores, personagem e letras). Por isso o convite aprovado entra como imagem de referência nas demais chamadas.
+- **Personagem único:** só a criança aparece no convite (sem companheiros, sem objetos nas mãos).
+- **Tipografia (itens 14 e 15), monograma e ilustrações do tema foram removidos** do kit por decisão do produto.
+- **Lembrete:** a contagem usa no máximo 5 dias (momento típico do envio); se a festa for hoje, "É HOJE!".
 
 ---
 
-## 8. Bugs e problemas conhecidos
+## 5. Aprendizados (o que não funcionou e por quê)
 
-1. **Dependência de Node/Python no Windows:**
-   - **Problema:** Em alguns ambientes Windows sem Node.js instalado globalmente no `PATH`, o comando `npm run dev` pode falhar.
-   - **Solução Implementada:** Criado o script `start.ps1`, um servidor web nativo em PowerShell usando `.NET HttpListener` na porta 3000.
-2. **Sobreposição de Textos sobre Ilustrações:**
-   - **Status:** `[RESOLVIDO NO FRONTEND]`
-   - **Causa:** Textos centralizados verticalmente em imagens com desenhos no rodapé.
-   - **Solução:** Aplicada classe `.invite-text-overlay` e `.reminder-overlay` com `align-items: flex-start` e `padding-bottom: 32%`. Mantê-la no renderizador final.
+1. **Descrever a foto em texto não preserva o rosto.** O que dá semelhança é enviar a **foto real** ao modelo de imagem (edição/geração com imagem de entrada).
+2. **Referências com personagens de marca enviadas como imagem:** o modelo copia os personagens e o filtro de segurança recusa de forma imprevisível. Hoje o texto do tema é sanitizado e, se o filtro recusar, a escada remove referências/foto passo a passo. **O que fazer com personagens de marca é decisão de negócio/jurídica em aberto** (ver §8).
+3. **Texto na imagem:** só funciona com conferência. Frases curtas, nome soletrado letra a letra e conferência por visão (inclui acentos, texto cortado e texto extra). Conferência só de "presença" aprovava erros.
+4. **Bug de cache/CDN (resolvido):** o projeto não era salvo no banco (campo `initialLetter` inexistente na tabela), então todas as gerações usavam o mesmo caminho no storage e a CDN devolvia o convite anterior como referência dos extras. Hoje há pasta única por geração e o convite usado como referência vem da memória.
+5. **Recorte da prancha:** k-means e "ligar pixels vizinhos" falham quando a IA desenha linhas de grade ou cola os adesivos. A solução atual são **cortes pelos espaços vazios (XY-cut)** com limiar de "tinta" 160.
+6. **Falha de segurança (resolvida):** o servidor entregava a pasta raiz inteira (`server/.env`, código, `.git`). Hoje só serve `index.html`, `app.js`, `styles.css` e `assets/`.
+7. **Gemini não tem cota grátis para imagens** (cota 0 no plano gratuito); precisa de crédito pré-pago no AI Studio. Os modelos oscilam com erro 503 ("alta demanda") e, às vezes, a chamada pendura: por isso há limite de tempo por modelo e reserva na OpenAI.
+8. **Gemini recusou editar uma imagem já gerada** (erro `PROHIBITED_CONTENT`); gerar do zero com foto + referência funciona.
 
 ---
 
-## 9. Arquitetura
-
-O protótipo atual adota uma arquitetura **Single Page Application (SPA) Monolítica Frontend** leve, sem dependências de frameworks de compilação (zero Webpack, Vite ou Babel), facilitando manutenção e carregamento instantâneo.
+## 6. Arquitetura e estrutura de pastas
 
 ```
-[ Navegador do Usuário (Mobile / Desktop) ]
-       │
-       ├── index.html   ──> Estrutura semântica das 10 exibições (Views)
-       ├── styles.css   ──> Design System, tokens CSS, breakpoints e animações
-       └── app.js       ──> Roteamento SPA, manipulação de estado (appState) e dados Mock
+Mia/
+├── index.html, styles.css, app.js     # Frontend SPA (10 telas) — servido pelo backend em http://localhost:3001
+├── assets/                            # Imagens de exemplo (modo sem backend) e identidade da marca
+├── AI_HANDOFF.md, README.md
+├── start.ps1                          # Servidor estático antigo (PowerShell), não é mais necessário
+└── server/
+    ├── server.js                      # Express: serve só o frontend público + rotas /api
+    ├── routes/    auth.js, projects.js, generate.js, downloads.js
+    ├── middleware/ auth.js
+    ├── migrations/ 001_initial_schema.sql   # Schema do Supabase
+    ├── services/
+    │   ├── ai.js        # Convite: visão, sanitização, prompts, Gemini/OpenAI, conferência de texto
+    │   ├── gemini.js    # Chamada à API do Gemini (tempo limite, próximo modelo, classificação de erro)
+    │   ├── kit.js       # Itens do kit a partir do convite + recorte + papel + lembrancinha
+    │   ├── identity.js  # Paleta e fontes
+    │   ├── phrases.js   # Frases sorteadas
+    │   ├── renderer.js  # PNG/PDF em proporção original, marca d'água, miniaturas
+    │   ├── storage.js, supabase.js
+    └── test-*.js                      # Scripts MANUAIS (cada um chama a API e GASTA crédito)
 ```
 
-### Arquitetura Alvo Recomendada para Produção (Próxima Fase)
-```
-[ Frontend SPA (React / Next.js ou HTML/JS atual) ]
-       │
-       ├── API Gateway / Node.js Backend (Express ou Fastify / Next API routes)
-       │      ├── Auth Service (Supabase / Firebase Auth)
-       │      ├── Payment Webhooks (Kiwify / Mercado Pago)
-       │      ├── AI Pipelines (Replicate / Flux / OpenAI)
-       │      ├── Image Processing & Canvas (Node Canvas / Sharp / Rembg)
-       │      └── ZIP Storage Manager (AWS S3 / Supabase Storage)
-       └── Database (PostgreSQL / Supabase)
-```
+Banco: tabela `projects` no Supabase (type, name, age, date, time, location, phrase, theme, notes, initial_letter, bg_template, status, watermarked, assets_urls, user_id). Storage: bucket `meraki-kits`, pasta `projects/<id>/`.
 
 ---
 
-## 10. Estrutura de pastas
+## 7. Variáveis de ambiente (`server/.env`, **não vai para o git**)
 
-```
-meraki-plataforma/
-│
-├── AI_HANDOFF.md           # [ESTE DOCUMENTO] Handoff técnico completo para a nova IA
-├── README.md               # Guia rápido de introdução e instrução de execução
-├── index.html              # Markup de todas as 10 telas e componentes da plataforma
-├── styles.css              # Estilos globais, tokens da marca, layout responsivo e utilitários
-├── app.js                  # Lógica da aplicação, navegação SPA, estado e gerenciador mock
-├── package.json            # Configuração de scripts npm e metadados
-├── start.ps1               # Servidor web nativo PowerShell .NET (disponível sem Node/Python)
-│
-└── assets/                 # Imagens, mascotes, logos e fundos aquarelados
-    ├── logo.jpg            # Logotipo oficial Meraki Artes Digitais
-    ├── mia.png             # Personagem / Mascot Mia (Fundo transparente)
-    ├── girl_1.jpg          # Mascote modelo 1 (Infantil / Aniversariante)
-    ├── girl_2.jpg          # Mascote modelo 2 (Debutante)
-    ├── infantil_bg.jpg     # Fundo aquarelado tema Jardim Encantado
-    ├── debutante_bg.jpg    # Fundo aquarelado tema Princesa Realeza
-    ├── adulto_bg.jpg       # Fundo aquarelado tema Eucalipto / Floral
-    ├── elementos_sheet.jpg # Prancha com múltiplos elementos artísticos
-    ├── ref_ui_1.jpg        # Referência visual de interface do usuário
-    └── ref_ui_2.jpg        # Referência visual de interface do usuário
-```
-
----
-
-## 11. Tecnologias e dependências
-
-### Tecnologias Utilizadas no Protótipo Atual
-- **Linguagem:** HTML5, CSS3, JavaScript (ES6+ Vanilla).
-- **Fontes de Terceiros (Google Fonts CDN):**
-  - Titulares / Elegantes: `Playfair Display` (Serif).
-  - Corpo de texto / Leitura: `Poppins` (Sans-serif).
-  - Acentos Cursivos: `Great Vibes` e `Sacramento` (Cursive).
-- **Servidor Local de Teste:**
-  - Node `http-server` (porta 3000).
-  - Script nativo PowerShell `.NET HttpListener` (`start.ps1`).
-
----
-
-## 12. Banco de dados
-
-No momento, o banco de dados é **simulado em memória e persistido no `localStorage`** do navegador sob a chave `meraki_state_collage_v3`.
-
-### Esquema de Dados Mock Atual (`appState`)
-
-#### Tabela `projects` (Simulada)
-- `id` (integer/timestamp): Identificador único do projeto.
-- `type` (string): `'infantil'`, `'debutante'`, ou `'adulto'`.
-- `name` (string): Nome da aniversariante / criança.
-- `age` (string): Idade formatada (ex: `"5 anos"`).
-- `date` (string): Data formatada (`"DD/MM/AAAA"`).
-- `time` (string): Horário (`"15:30"`).
-- `location` (string): Endereço e local do evento.
-- `phrase` (string): Frase personalizada do convite.
-- `theme` (string): Nome do tema (ex: `"Jardim Encantado"`).
-- `notes` (string): Observações de estilo e cores.
-- `watermarked` (boolean): Se `true`, exibe marca d'água no frontend.
-- `bgTemplate` (string): Caminho do fundo gerado/modelo.
-- `initialLetter` (string): Primeira letra para o brasão/monograma.
-
----
-
-## 13. APIs e integrações
-
-### Integradas no Protótipo Visual
-- Google Fonts API (Webfonts).
-
-### Integrações Planejadas para as Próximas Fases
-1. **API de Geração de Imagens (IA):**
-   - Servidores Replicate / Flux.1 / Midjourney (via proxy API) para gerar a arte de fundo, ilustrações e mascotes.
-2. **API de Remoção de Fundo:**
-   - `remove.bg` API para isolar elementos avulsos e mascote com fundo transparente.
-3. **Gateway de Pagamento / Webhooks (Kiwify / Mercado Pago):**
-   - Criação de cobrança PIX/Cartão e recebimento de notificações HTTP POST.
-
----
-
-## 14. Variáveis de ambiente
-
-Nas próximas fases com backend Node.js / Python, as seguintes variáveis serão necessárias:
+O modelo está em `server/.env.example`. Principais:
 
 ```env
-# Servidor Backend
-PORT=3000
-NODE_ENV=development
-
-# Banco de Dados
-DATABASE_URL=<DATABASE_URL>
-
-# Gateway de Pagamento (Kiwify / Mercado Pago)
-PAYMENT_API_KEY=<PAYMENT_API_KEY>
-PAYMENT_WEBHOOK_SECRET=<PAYMENT_WEBHOOK_SECRET>
-
-# Integrações de IA (Geração de Imagens)
-REPLICATE_API_TOKEN=<REPLICATE_API_TOKEN>
-OPENAI_API_KEY=<OPENAI_API_KEY>
-
-# Armazenamento de Arquivos
-S3_BUCKET_NAME=<S3_BUCKET_NAME>
-S3_ACCESS_KEY=<S3_ACCESS_KEY>
-S3_SECRET_KEY=<S3_SECRET_KEY>
+PORT=3001
+NODE_ENV=development            # development libera os downloads (bypass de pagamento)
+SUPABASE_URL=...  SUPABASE_ANON_KEY=...  SUPABASE_SERVICE_ROLE_KEY=...
+GEMINI_API_KEY=...              # provedor principal (aistudio.google.com/apikey; precisa de crédito pré-pago)
+OPENAI_API_KEY=...              # visão, conferência de texto e reserva de imagem
+# Opcionais
+IMAGE_PROVIDER=gemini|openai    # padrão: gemini se GEMINI_API_KEY existir
+GEMINI_POSTER_MODELS=gemini-3-pro-image,gemini-3.1-flash-image-preview
+GEMINI_KIT_MASCOT_MODELS=...    GEMINI_KIT_ITEM_MODELS=...
+OPENAI_POSTER_MODEL / OPENAI_EDIT_MODEL / OPENAI_IMAGE_MODEL
+KIT_EXTRAS=off                  # desliga os itens extras (economiza ~US$ 0,50 por geração)
 ```
 
 ---
 
-## 15. Regras de negócio
+## 8. Como executar e testar
 
-1. **Lista Oficial dos 15 Itens do Kit:**
-   - 01. Convite Principal Retrato (Alta resolução).
-   - 02. Lembrete da Festa (Card de contagem regressiva RSVP para WhatsApp).
-   - 03. Mascote Oficial da Aniversariante (Ilustração estilo bonequinha aquarelada).
-   - 04. Prancha Geral de Elementos Separados (Grelha para recortar).
-   - 05. Elementos Principais (Arquivo isolado).
-   - 06. Elementos Complementares (Borboletas, florais, laços isolados).
-   - 07. Ilustrações do Tema (Guirlandas e fitas decorativas).
-   - 08. Fundo Personalizado Limpo (Sem nenhum texto).
-   - 09. Papel Digital Estampado (Textura repetitiva para embalagens).
-   - 10. Logotipo da Festa (Texto vetorizado com o nome do tema).
-   - 11. Brasão com Inicial (Moldura oficial).
-   - 12. Monograma Elegante (Iniciais para selos/envelopes).
-   - 13. Paleta de Cores Oficial (Hexadecimais).
-   - 14. Tipografia Principal (Serifada recomendada).
-   - 15. Tipografia Complementar (Sans-serif recomendada).
+```bash
+cd server && npm install
+cd server && npm run dev        # backend + frontend em http://localhost:3001
+```
 
-2. **Diferenciação de Públicos:**
-   - **Cliente Final:** Permissão de até 2 gerações prévia com marca d'água grátis. Pagamento avulso por kit desbloqueia os downloads limpos.
-   - **Profissional (Conviteira):** Assinatura mensal. Acesso ao Portal da Conviteira com limite de 6 gerações/dia e 60 gerações/mês sem marca d'água.
+Abra `http://localhost:3001/` e dê **Ctrl+F5** ao mudar o código (a SPA não recarrega sozinha). No PowerShell antigo use comandos separados (sem `&&`).
+Atenção: `npm run dev` na raiz também sobe um `http-server` na porta **3000** que serve a pasta inteira (inclusive `server/.env`); use só a porta 3001.
 
-3. **Formato do Convite e Lembrete:**
-   - O convite deve ser estritamente em **Formato Retrato** (Vertical, ideal para visualização em telas de celular e envio via WhatsApp).
-   - O lembrete deve conter o texto padrão: `"LEMBRETE - Faltam apenas X dias para a minha festa e você não pode perder."`
+Scripts manuais (gastam crédito): `node test-gemini.js --list`, `test-pipeline.js`, `test-kit.js`, `test-mascot.js`, `test-kit2.js` (logo/brasão/lembrete), `test-favor.js`. As saídas vão para `server/test-output-*` (ignoradas pelo git).
+
+### Para retomar depois de formatar o computador
+1. Instalar Git e Node.js. 2. `git clone https://github.com/felipeemr/mia-project.git` e `git checkout feat/kit-completo-gemini`.
+3. `cd server && npm install`. 4. Recriar `server/.env` (chaves: Supabase no painel do projeto; Gemini no AI Studio; **OpenAI precisa de uma chave nova**, pois não é possível rever a antiga).
 
 ---
 
-## 16. Decisões técnicas
-
-1. **CSS Puro vs Tailwind/Bootstrap:** Optou-se por CSS nativo modular e flexível com variáveis `:root` para garantir total controle sobre o delicado e refinado Design System da marca Meraki sem sobrescritas de frameworks.
-2. **Abas como Smooth Scroll Anchors:** Em vez de esconder itens em abas separadas na tela de resultados, o protótipo mantém **todos os 15 itens visíveis simultaneamente** em rolagem contínua. As abas do topo servem como atalhos de rolagem suave.
-3. **Inclusão do Servidor Nativo PowerShell (`start.ps1`):** Adicionado para permitir rodar o protótipo em qualquer máquina Windows imediatamente, sem pré-requisitos de instalação de ambiente Node ou Python.
-
----
-
-## 17. Abordagens que não funcionaram
-
-1. **Textos Centralizados sobre o Fundo do Convite:**
-   - *Tentativa:* Centralizar verticalmente os campos de texto no meio do convite.
-   - *Resultado Ruim:* Os dados (nome, local, data) ficavam sobrepostos aos personagens e desenhos de aquarela desenhados na base da arte.
-   - *Solução Adotada:* Usar `display: flex; align-items: flex-start` com um `padding-bottom: 32%` na div overlay, forçando o bloco textual a ocupar apenas o terço superior limpo da imagem.
-2. **Esconder Itens em Abas Ocultas:**
-   - *Tentativa:* Ocultar os papéis digitais e monogramas sob abas separadas na tela de resultado.
-   - *Resultado Ruim:* A usuária solicitou ver **todos os itens prontos de uma só vez** com marca d'água ao rolar a página.
-   - *Solução Adotada:* Galeria vertical contínua com abas atuando apenas como links de navegação por âncora.
-
----
-
-## 18. Como executar o projeto
-
-### Opção A: Via PowerShell (Windows Nativo - Recomendado)
-1. Abra o Terminal / PowerShell na pasta do projeto:
-   ```powershell
-   cd C:\Users\danie\.gemini\antigravity\scratch\meraki-plataforma
-   ```
-2. Execute o script de inicialização:
-   ```powershell
-   powershell -ExecutionPolicy Bypass -File .\start.ps1
-   ```
-3. O navegador será aberto automaticamente na URL: `http://localhost:3000/`
-
-### Opção B: Via Node.js (Se instalado no sistema)
-1. Acesse o diretório do projeto:
-   ```bash
-   cd meraki-plataforma
-   ```
-2. Execute o servidor de desenvolvimento:
-   ```bash
-   npm run dev
-   ```
-3. Acesse `http://localhost:3000/` no navegador.
-
----
-
-## 19. Como testar
-
-1. **Testando a Landing Page:**
-   - Redimensione o navegador para largura mobile (375px) e desktop (1200px+).
-   - Verifique o menu hambúrguer no mobile.
-2. **Testando a Geração Completa:**
-   - Clique em **"CRIAR MINHA FESTA"**.
-   - No Passo 1, altere entre Infantil, 15 Anos e Adulto.
-   - Clique no painel flutuante de testes `🛠️` no canto inferior direito e clique em **"🐰 Helena (Infantil)"** para preenchimento rápido.
-   - Clique em **"CRIAR MINHA IDENTIDADE ✨"**.
-3. **Testando a Prévia e Rolagem dos 15 Itens:**
-   - Observe a animação do loader com a Mia.
-   - Na tela de resultados, clique nas abas superiores (1. Destaques, 2. Elementos, 3. Papéis, 4. Marca) e confirme se a página rola suavemente para cada grupo.
-   - Confirme a marca d'água sob todas as peças.
-4. **Testando Checkout e Desbloqueio:**
-   - Clique em **"AMEI, QUERO MEU KIT COMPLETO"**.
-   - Clique em **"🟢 APROVAR PAGAMENTO PIX"**.
-   - Verifique se o kit é liberado limpo e se os botões de download de PNG, PDF e ZIP funcionam.
-
----
-
-## 20. Próximas tarefas
+## 9. Lista de tarefas (o que falta)
 
 ### Alta prioridade
-- [ ] Definir o stack de backend (Node.js/Express, Next.js API Routes ou Python/FastAPI).
-- [ ] Escolher e cadastrar API de geração de imagem por IA (Replicate/Flux ou Midjourney API).
-- [ ] Implementar motor server-side de Canvas/Sharp para renderização limpa do convite e lembrete em alta resolução (300 DPI) com as fontes vetorizadas.
+- [ ] **Rodar uma geração completa pelo site** e validar ponta a ponta o que mudou por último: lembrete 2:3, lembrancinha (Obrigado/Obrigada), papel digital, ZIP, pergunta menino/menina, nenhuma imagem de exemplo piscando. Ainda não foi validado inteiro.
+- [ ] **Abrir o PR** `feat/kit-completo-gemini` → `main` e fazer o merge (o `gh` não está instalado; link: `https://github.com/felipeemr/mia-project/pull/new/feat/kit-completo-gemini`).
+- [ ] **Segurança das chaves:** revogar o token antigo do Replicate; se o servidor já ficou acessível fora do computador, trocar as chaves da OpenAI, Gemini e Supabase (houve vazamento do `.env` pela rota estática, já corrigido).
+- [ ] **Pagamento real** (Kiwify / Mercado Pago): cobrança PIX/cartão e webhook que muda o projeto para `paid`; remover o bypass de `NODE_ENV=development` nos downloads.
+- [ ] **Reduzir a espera** (hoje 2,5 a 6 min): mostrar o convite assim que ficar pronto e carregar o resto do kit em segundo plano (status/polling).
+- [ ] **Controle de custo:** ~US$ 0,70 a 1,00 por kit. Avaliar gerar itens caros só após o pagamento, definir limites por usuário e criar alertas de saldo (OpenAI e Gemini). Conferir o preço do kit (R$ 47,90) contra o custo real e a taxa de conversão.
 
 ### Média prioridade
-- [ ] Conectar banco de dados PostgreSQL / Supabase para armazenamento de usuários e projetos.
-- [ ] Integrar checkout da Kiwify ou Mercado Pago para cobrança de kits e assinaturas.
-- [ ] Implementar remoção automática de fundo em imagens (Background Removal API).
+- [ ] **Lembrancinha:** deixar o estilo do agradecimento igual ao do logotipo, aproximar os dois textos (sobra espaço no meio) e tratar a baixa resolução do fundo (vem de 848×1264).
+- [ ] **Logotipo idêntico ao título do convite:** hoje é "da mesma família"; se for preciso idêntico, recortar o título direto da imagem do convite (com o fundo da cena).
+- [ ] Decidir se junta **05 e 06 em um único item "Elementos avulsos"** (a divisão principais/complementares é artificial).
+- [ ] **Tela de downloads (pós-pagamento):** botões individuais ainda apontam para arquivos de exemplo (`assets/*.jpg`); ligar aos arquivos reais. Testar o ZIP completo (pastas 05/06 e nova numeração).
+- [ ] **Mascote na tela:** aparece pequeno numa moldura circular; melhorar o enquadramento.
+- [ ] Testar a fundo **15 anos (debutante) e adulto** (prompts, frases, estilos); só o infantil foi testado a fundo.
+- [ ] Ajustar `npm run dev` para subir só o backend (porta 3001) e não expor a pasta pela porta 3000.
+- [ ] **Disponibilidade do Gemini:** monitorar os 503/timeouts; avaliar usar o Flash como principal e o Pro como reserva (`GEMINI_POSTER_MODELS`).
+- [ ] Adicionar a coluna `gender` (e quaisquer outras) ao schema do banco, se for útil guardar.
+- [ ] Limpar o código de fontes (`identity.js`) se a tipografia não voltar ao kit.
+- [ ] Portal da Conviteira: validar limites e fluxo com o novo pipeline.
+- [ ] **Testes automatizados** (hoje só scripts manuais que gastam crédito).
 
 ### Baixa prioridade
-- [ ] Adicionar suporte a novos tipos de eventos futuros (Casamentos, Batizados).
-- [ ] Desenvolver editor visual avançado tipo "Canva simples" para ajuste fino dos textos pelo cliente após a geração.
+- [ ] Novos tipos de evento (casamento, batizado).
+- [ ] Editor visual simples para ajustes de texto pela cliente.
+- [ ] Remover o servidor PowerShell antigo (`start.ps1`) e os documentos desatualizados do README.
+
+### Decisões de negócio em aberto (precisam de você)
+- **Personagens e marcas registradas:** o Gemini aceitou gerar trajes como o do Homem-Aranha. Vender isso tem risco de direitos autorais. Decidir a política (aviso ao cliente, termos de uso, só temas livres, licenciamento).
+- **Dados de crianças (LGPD):** as fotos de menores são enviadas à OpenAI e ao Google. Definir política de privacidade, consentimento dos responsáveis e retenção das imagens.
 
 ---
 
-## 21. Checklist para continuar o desenvolvimento
+## 10. Instruções para a próxima pessoa ou IA
 
-- [ ] Verificar se os arquivos `index.html`, `styles.css`, `app.js` e a pasta `assets/` estão intactos.
-- [ ] Testar a execução do servidor local na porta 3000.
-- [ ] Estudar a estrutura do objeto `appState` em `app.js`.
-- [ ] Garantir que o layout do convite permaneça no formato retrato.
-- [ ] Preservar as regras do Design System da marca Meraki (cores `#69D7D1`, `#F7A8C8` e personagem Mia).
-
----
-
-## 22. Instruções para a próxima IA
-
-1. **Não Reescreva o Frontend Existente sem Necessidade:** A Fase 1 (Protótipo Visual e Design System) já foi totalmente aprovada e atende a todos os requisitos estéticos e de usabilidade da usuária.
-2. **Preserve a Estrutura de Layout do Convite:** Mantenha os textos centralizados e afastados do rodapé (`align-items: flex-start`, `padding-bottom: 32%`) para não encobrir as ilustrações.
-3. **Respeite o Formato Retrato:** Convites e lembretes devem ser sempre mantidos em proporção retrato para telas de smartphones.
-4. **Mantenha os 15 Itens Visíveis na Prévia:** Não esconda peças sob abas fechadas; o cliente precisa rolar a tela e ver todo o universo de itens gerados.
-5. **Atualize Este Documento (`AI_HANDOFF.md`):** Sempre que implementar o backend, banco de dados ou integrações de IA, atualize este arquivo registrando as novas decisões técnicas.
-
----
-
-## 23. Contexto adicional do histórico da conversa
-
-Nesta seção está consolidado todo o histórico de decisões, interações, correções e preferências expressas pela usuária:
-
-* **Marca & Assistente:** `[IMPLEMENTADO]` A assistente **Mia** deve figurar ativamente na interface para passar um tom acolhedor e humanizado.
-* **Tipografia Personalizada:** `[IMPLEMENTADO]` A usuária rejeitou fontes genéricas e solicitou fontes elegantes e refinadas para festas. Foram aplicadas *Playfair Display*, *Poppins*, *Great Vibes* e *Sacramento*.
-* **Organização Modular dos 15 Itens:** `[IMPLEMENTADO]` Todos os 15 itens listados no kit oficial estão mapeados e renderizados no protótipo.
-* **Formato de Envio Virtual:** `[IMPLEMENTADO]` O convite e o lembrete foram desenhados especificamente em formato retrato para envio por WhatsApp ou redes sociais.
-* **Limite de Gerações:** `[IMPLEMENTADO]` O sistema possui controle de limite para o público final (1 geração + 1 regeneração grátis por padrão) e controle para o profissional (6/dia e 60/mês). No protótipo atual, os limites foram elevados no `DOMContentLoaded` para facilitar os testes da usuária.
-* **Soluções que Falharam e Foram Corrigidas:** `[IMPLEMENTADO]` Textos cobrindo personagens no rodapé do convite e lembrete em formato retangular simples sem arte compartilhada foram substituídos pelo design atual com fundo unificado e espaçamento ajustado.
+1. **Leia o §5 antes de mudar prompts ou o recorte:** vários caminhos já foram tentados e falharam.
+2. **Mantenha o convite como referência dos demais itens**; é o que garante a coerência do kit.
+3. **Cada teste real gasta dinheiro.** Use `KIT_EXTRAS=off` quando só for ajustar a tela.
+4. **Nunca sirva a pasta raiz como estática** e nunca versione o `.env` ou as pastas `server/test-output-*` (têm fotos de crianças).
+5. Mantenha este documento atualizado a cada decisão relevante.
 
 ---
 *Fim do documento AI_HANDOFF.md*

@@ -1,38 +1,25 @@
-# Meraki Artes Digitais — Plataforma de Identidade Visual para Festas com IA
+# Meraki Artes Digitais — Identidade Visual para Festas com IA
 
-Bem-vindo ao projeto **Meraki Artes Digitais**!
+Plataforma web que gera a identidade visual completa de uma festa com IA: convite, lembrete, mascote com o rosto da criança, elementos, fundo, papel digital, logotipo, brasão, lembrancinha e paleta (kit de 12 itens), com marca d'água na prévia e downloads limpos depois do pagamento.
 
-Este repositório contém a **Fase 1 (Protótipo Visual Navegável e Design System Mobile-First)** da plataforma web online para geração automatizada de papelaria e identidades visuais de festas aquareladas.
+## Documentação completa
 
----
+Estado do projeto, fluxo de geração, decisões, aprendizados e a **lista de tarefas do que falta** estão em **[AI_HANDOFF.md](AI_HANDOFF.md)**. Leia antes de alterar qualquer coisa.
 
-## 📄 Handoff Técnico Completo para a Próxima IA / Desenvolvedor
+## Como executar
 
-Todo o contexto, decisões de design, regras de negócio, arquitetura, estado das funcionalidades e instruções detalhadas para continuação do desenvolvimento estão documentados em:
+Pré-requisitos: Node.js e um arquivo `server/.env` (modelo em `server/.env.example`).
 
-👉 **[AI_HANDOFF.md](AI_HANDOFF.md)**
-
-Por favor, consulte o `AI_HANDOFF.md` antes de efetuar qualquer alteração ou iniciar novas fases de backend/IA.
-
----
-
-## 🚀 Como Executar o Projeto Localmente
-
-### Opção 1: Servidor Nativo PowerShell (Sem necessidade de Node/Python)
-No PowerShell, dentro do diretório do projeto, execute:
-```powershell
-powershell -ExecutionPolicy Bypass -File .\start.ps1
-```
-O projeto iniciará em `http://localhost:3000/`.
-
-### Opção 2: Servidor Node.js
-Se possuir o Node.js instalado:
 ```bash
+cd server
+npm install
 npm run dev
 ```
-Acesse `http://localhost:3000/` no seu navegador.
 
----
+Acesse **http://localhost:3001/** (o backend também serve o frontend). Depois de alterar o código, use Ctrl+F5 no navegador.
 
-## 🛠️ Menu de Testes do Desenvolvedor
-Ao abrir a aplicação no navegador, utilize o botão flutuante `🛠️` no canto inferior direito para navegar rapidamente entre qualquer uma das 10 telas ou aplicar presets automáticos de teste (Helena 5 anos, Giovanna 15 anos, Carolina 40 anos).
+> Não use `npm run dev` da raiz: ele sobe um servidor de arquivos na porta 3000 que serve a pasta inteira, inclusive `server/.env`.
+
+## Testes manuais
+
+Os scripts `server/test-*.js` chamam as APIs de IA e **gastam crédito**. Veja o AI_HANDOFF.md (seção 8).
