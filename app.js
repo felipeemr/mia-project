@@ -246,6 +246,11 @@ function loadStateFromStorage() {
     }
 }
 
+// Volta ao início com a página recarregada: formulário, foto e kit anterior não ficam na tela
+function goHomeFresh() {
+    window.location.href = window.location.pathname;
+}
+
 // 3. SPA RESPONSIVE ROUTING
 function showView(viewId) {
     const views = document.querySelectorAll('.view-page-item');
