@@ -13,6 +13,9 @@ const { supabaseAdmin }            = require('../services/supabase');
 const { generateKitImages }        = require('../services/ai');
 const { uploadFromUrl, uploadBuffer } = require('../services/storage');
 const { renderConvite, renderLembrete, createThumbnail } = require('../services/renderer');
+const { buildIdentity } = require('../services/identity');
+const { generateKitExtras } = require('../services/kit');
+const { pickPhrase } = require('../services/phrases');
 const { optionalAuth }             = require('../middleware/auth');
 
 // Multer em memória para upload de fotos do formulário
@@ -65,24 +68,73 @@ async function checkGenerationLimits(userId, userType, config = {}) {
     return { allowed: true };
 }
 
+const ALL_KIT_ITEMS = ['mascote', 'elementos', 'fundo', 'logo', 'lembrete', 'brasao', 'lembrancinha'];
+
+// Guarda os itens do kit no Supabase; se falhar, devolve a imagem embutida (data URL) só para esta resposta
+async function saveKitExtras(extras, pid) {
+    const saveBuf = async (buf, name) => {
+        if (!buf) return null;
+        try { return await uploadBuffer(buf, `projects/${pid}/${name}`, 'image/png'); }
+        catch (e) {
+            console.warn(`[Generate] Falha ao salvar ${name} no storage: ${e.message}`);
+            return `data:image/png;base64,${buf.toString('base64')}`;
+        }
+    };
+    const saveList = (list, prefix) => Promise.all((list || []).map((e, i) => saveBuf(e.png, `${prefix}_${String(i + 1).padStart(2, '0')}.png`)));
+    const [mascote, elementos, fundo, papel, principais, complementares, logo, lembrete, brasao, lembrancinha] = await Promise.all([
+        saveBuf(extras.mascote, 'mascote.png'),
+        saveBuf(extras.elementosSheet, 'prancha_elementos.png'),
+        saveBuf(extras.fundo, 'fundo_limpo.png'),
+        saveBuf(extras.papel, 'papel_digital.png'),
+        saveList(extras.principais, 'elemento_principal'),
+        saveList(extras.complementares, 'elemento_complementar'),
+        saveBuf(extras.logo, 'logotipo.png'),
+        saveBuf(extras.lembrete, 'lembrete.png'),
+        saveBuf(extras.brasao, 'brasao.png'),
+        saveBuf(extras.lembrancinha, 'lembrancinha.png'),
+    ]);
+    return {
+        urls: { mascote, elementos, fundo, papel, logo, lembrete, brasao, lembrancinha },
+        kit: { principais: principais.filter(Boolean), complementares: complementares.filter(Boolean) },
+    };
+}
+
 // ---------------------------------------------------------------------------
 // POST /api/generate — Pipeline principal de geração
 // ---------------------------------------------------------------------------
 
 router.post('/', optionalAuth, upload.fields([
-    { name: 'photos', maxCount: 5 },
+    { name: 'photos', maxCount: 1 },
     { name: 'references', maxCount: 5 }
 ]), async (req, res) => {
+    // Todos os campos do formulário são obrigatórios: nada é preenchido por conta do servidor
+    const body = req.body || {};
+    const str = (v) => (typeof v === 'string' ? v.trim() : '');
+    const faltando = [];
+    if (!['infantil', 'debutante', 'adulto'].includes(str(body.type))) faltando.push('tipo de festa');
+    if (!str(body.name))     faltando.push('nome');
+    if (!str(body.age))      faltando.push('idade');
+    if (!['m', 'f'].includes(str(body.gender))) faltando.push('menino ou menina');
+    if (!str(body.date))     faltando.push('data da festa');
+    if (!str(body.time))     faltando.push('horário');
+    if (!str(body.location)) faltando.push('local');
+    if (!str(body.theme))    faltando.push('tema');
+    if (!(req.files?.photos?.length)) faltando.push('foto da criança');
+    if (faltando.length) {
+        return res.status(400).json({ error: `Preencha todos os campos obrigatórios: ${faltando.join(', ')}.` });
+    }
+
     const projectData = {
-        type:     req.body.type     || 'infantil',
-        name:     req.body.name     || 'Aniversariante',
-        age:      req.body.age      || '',
-        date:     req.body.date     || '',
-        time:     req.body.time     || '',
-        location: req.body.location || '',
-        phrase:   req.body.phrase   || '',
-        theme:    req.body.theme    || '',
-        notes:    req.body.notes    || '',
+        type:     str(body.type),
+        name:     str(body.name),
+        age:      str(body.age),
+        date:     str(body.date),
+        time:     str(body.time),
+        location: str(body.location),
+        gender:   str(body.gender),                        // menino/menina: define "Obrigado"/"Obrigada" na lembrancinha
+        phrase:   pickPhrase(str(body.type)),              // sorteada pelo sistema (frases curtas e genéricas)
+        theme:    str(body.theme),
+        notes:    str(body.notes),                         // único campo opcional (observações livres)
     };
     projectData.initialLetter = projectData.name.charAt(0).toUpperCase();
 
@@ -102,11 +154,13 @@ router.post('/', optionalAuth, upload.fields([
     // --- 2. Criar registro no banco com status 'generating' ---
     let projectId = null;
     try {
-        const { data: projectRecord } = await supabaseAdmin
+        // initialLetter (camelCase) não é coluna da tabela: vai como initial_letter
+        const { initialLetter: _ignored, gender: _gender, ...dbFields } = projectData;
+        const { data: projectRecord, error: insertError } = await supabaseAdmin
             .from('projects')
             .insert({
                 user_id:       req.user?.id || null,
-                ...projectData,
+                ...dbFields,
                 initial_letter: projectData.initialLetter,
                 bg_template:   DEFAULT_BG[projectData.type],
                 status:        'generating',
@@ -116,30 +170,38 @@ router.post('/', optionalAuth, upload.fields([
             .select('id')
             .single();
 
+        if (insertError) console.warn('[Generate] Aviso: projeto não salvo no banco:', insertError.message);
         if (projectRecord) projectId = projectRecord.id;
     } catch (dbErr) {
         console.warn('[Generate] Aviso: não foi possível salvar projeto no banco:', dbErr.message);
     }
 
+    // Pasta única desta geração no armazenamento. Sem projeto no banco, usa um id aleatório:
+    // caminhos fixos eram sobrescritos e a CDN devolvia imagens de gerações anteriores.
+    const storageId = projectId || `tmp-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+
     // --- 3. Definir fundo: tenta IA, cai em padrão se falhar ---
     let bgBuffer    = null;
     let assetsUrls  = {};
     let aiDna       = null;
+    let kitProvider = null; // provedor que gerou o convite: o kit segue o mesmo
     const bgDefault = DEFAULT_BG[projectData.type];
 
     try {
-        const aiAvailable = !!(process.env.REPLICATE_API_TOKEN || process.env.OPENAI_API_KEY);
+        const aiAvailable = !!(process.env.GEMINI_API_KEY || process.env.OPENAI_API_KEY);
 
         if (aiAvailable) {
             console.log('[Generate] Chamando API de IA para geração das imagens...');
             const aiImages = await generateKitImages(projectData, childPhotos, inspirationRefs);
             aiDna = aiImages._dna || null;
+            kitProvider = aiImages._provider || null;
+            assetsUrls.kit_provider = kitProvider;
 
             // Salva cada imagem no Supabase Storage com URL permanente
             const savePromises = Object.entries(aiImages).map(async ([key, url]) => {
-                if (!url || key === '_dna') return; // Ignora _dna, pois não é uma URL de imagem
+                if (!url || key === '_dna' || key === '_provider') return; // Ignora _dna, pois não é uma URL de imagem
                 try {
-                    const savedUrl = await uploadFromUrl(url, `projects/${projectId}/${key}.png`);
+                    const savedUrl = await uploadFromUrl(url, `projects/${storageId}/${key}.png`);
                     assetsUrls[key] = savedUrl;
                 } catch (e) {
                     console.warn(`[Generate] Falha ao salvar ${key}:`, e.message);
@@ -149,14 +211,16 @@ router.post('/', optionalAuth, upload.fields([
             });
             await Promise.all(savePromises);
 
-            // Usa o fundo gerado pela IA para o convite (suporta URL remota e Data URI)
-            if (assetsUrls.background) {
-                if (assetsUrls.background.startsWith('data:')) {
-                    const base64Part = assetsUrls.background.replace(/^data:image\/\w+;base64,/, '');
-                    bgBuffer = Buffer.from(base64Part, 'base64');
+            // Usa o convite que a IA acabou de gerar. IMPORTANTE: vem da memória (Data URI) ou da URL original da IA,
+            // e NÃO da URL pública do Supabase: ela pode devolver, pelo cache da CDN, o convite de uma geração anterior
+            // (isso fazia mascote, prancha e fundo saírem com o tema do convite antigo).
+            const rawBg = aiImages.background;
+            if (rawBg) {
+                if (rawBg.startsWith('data:')) {
+                    bgBuffer = Buffer.from(rawBg.replace(/^data:image\/\w+;base64,/, ''), 'base64');
                 } else {
                     const axios = require('axios');
-                    const resp  = await axios.get(assetsUrls.background, { responseType: 'arraybuffer', timeout: 30000 });
+                    const resp  = await axios.get(rawBg, { responseType: 'arraybuffer', timeout: 30000 });
                     bgBuffer    = Buffer.from(resp.data);
                 }
             }
@@ -196,13 +260,59 @@ router.post('/', optionalAuth, upload.fields([
         if (projectId) {
             // Se a IA gerou um lembrete nativo, usamos ele como preview
             lembreteUrl = assetsUrls.lembrete || null;
-            await uploadBuffer(conviteThumb, `projects/${projectId}/convite_thumb.jpg`,    'image/jpeg');
+            await uploadBuffer(conviteThumb, `projects/${storageId}/convite_thumb.jpg`,    'image/jpeg');
         }
 
         assetsUrls.convite_preview  = null; // Usará background
         assetsUrls.lembrete_preview = lembreteUrl;
     } catch (renderErr) {
         console.warn('[Generate] Aviso na renderização:', renderErr.message);
+    }
+
+    // --- 4b. Identidade visual (paleta e fontes) derivada da arte do convite: sem custo de IA ---
+    let identity = null;
+    try {
+        identity = await buildIdentity(projectData, bgBuffer, aiDna);
+    } catch (idErr) {
+        console.warn('[Generate] Aviso ao montar identidade visual:', idErr.message);
+    }
+
+    // --- 4c. Itens extras do kit (mascote, prancha, elementos, fundo, papel), coerentes com o convite ---
+    // Desligue com KIT_EXTRAS=off no .env (cada geração custa ~US$ 0,27 a mais).
+    let kit = null;
+    let kitMissing = [];
+    let kitQuota = false;
+    const kitUrls = {};
+    if (process.env.KIT_EXTRAS !== 'off' && (process.env.GEMINI_API_KEY || process.env.OPENAI_API_KEY)) {
+        try {
+            const extras = await generateKitExtras({
+                invitation: bgBuffer,
+                childPhoto: childPhotos[0]?.buffer || null,
+                themeText: projectData.theme,
+                provider: kitProvider,
+                palette: identity?.palette || null,
+                name: projectData.name,
+                age: projectData.age,
+                gender: projectData.gender,
+                project: { date: projectData.date, time: projectData.time, location: projectData.location },
+            });
+
+            const saved = await saveKitExtras(extras, storageId);
+            Object.assign(kitUrls, saved.urls);
+            kit = saved.kit;
+            kitMissing = extras.missing || [];
+            kitQuota = !!extras.quota;
+
+            // No banco entram só URLs de verdade (nunca imagens embutidas)
+            const http = u => (u && /^https?:/.test(u)) ? u : null;
+            for (const k of ['mascote', 'elementos', 'fundo', 'papel', 'logo', 'lembrete', 'brasao', 'lembrancinha']) if (http(kitUrls[k])) assetsUrls[k] = kitUrls[k];
+            assetsUrls.kit_files = {
+                principais: kit.principais.filter(http), complementares: kit.complementares.filter(http),
+            };
+        } catch (kitErr) {
+            console.warn('[Generate] Aviso ao gerar itens extras do kit:', kitErr.message);
+            kitMissing = ALL_KIT_ITEMS.slice();
+        }
     }
 
     // --- 5. Atualizar status do projeto no banco ---
@@ -236,16 +346,23 @@ router.post('/', optionalAuth, upload.fields([
         assetsUrls: {
             // Imagens geradas por IA (com cache-buster para forçar a atualização no navegador)
             background:   applyCacheBuster(assetsUrls.background),
-            mascote:      applyCacheBuster(assetsUrls.mascote),
-            elementos:    applyCacheBuster(assetsUrls.elementos),
-            fundo:        applyCacheBuster(assetsUrls.fundo),
-            papel:        applyCacheBuster(assetsUrls.papel),
+            mascote:      applyCacheBuster(kitUrls.mascote   || assetsUrls.mascote),
+            elementos:    applyCacheBuster(kitUrls.elementos || assetsUrls.elementos),
+            fundo:        applyCacheBuster(kitUrls.fundo     || assetsUrls.fundo),
+            papel:        applyCacheBuster(kitUrls.papel     || assetsUrls.papel),
+            logo:         applyCacheBuster(kitUrls.logo      || assetsUrls.logo),
             // Convite e lembrete renderizados em alta resolução
             convitePreview:  applyCacheBuster(assetsUrls.convite_preview),
-            lembretePreview: applyCacheBuster(assetsUrls.lembrete_preview),
+            lembretePreview: applyCacheBuster(kitUrls.lembrete || assetsUrls.lembrete_preview),
+            brasao:          applyCacheBuster(kitUrls.brasao),
+            lembrancinha:    applyCacheBuster(kitUrls.lembrancinha),
             // DNA Visual extraído (tipografia, ícones)
             _dna:            aiDna,
         },
+        identity,
+        kit,
+        kitMissing,
+        kitQuota,
         project: {
             ...projectData,
             id: projectId,
@@ -275,6 +392,70 @@ router.get('/status/:projectId', optionalAuth, async (req, res) => {
         });
     } catch (err) {
         res.status(500).json({ error: err.message });
+    }
+});
+
+// ---------------------------------------------------------------------------
+// POST /api/generate/retry/:projectId — Refaz só os itens do kit que não saíram
+// body (multipart): items (JSON ["mascote",...]), photos (opcional: necessária para o mascote)
+// ---------------------------------------------------------------------------
+router.post('/retry/:projectId', optionalAuth, upload.fields([{ name: 'photos', maxCount: 1 }]), async (req, res) => {
+    try {
+        const items = (() => { try { return JSON.parse(req.body.items || '[]'); } catch { return []; } })()
+            .filter(k => ALL_KIT_ITEMS.includes(k));
+        if (!items.length) return res.status(400).json({ error: 'Nenhum item informado para refazer.' });
+
+        const { data: proj, error } = await supabaseAdmin.from('projects').select('*').eq('id', req.params.projectId).single();
+        if (error || !proj) return res.status(404).json({ error: 'Projeto não encontrado.' });
+        const urls = proj.assets_urls || {};
+        if (!urls.background) return res.status(400).json({ error: 'Convite original não encontrado.' });
+
+        const axios = require('axios');
+        const fetchBuf = async (u) => Buffer.from((await axios.get(u, { responseType: 'arraybuffer', timeout: 30000 })).data);
+        const invitation = await fetchBuf(urls.background);
+        const existing = {};
+        if (items.includes('lembrancinha')) {
+            if (urls.fundo) existing.fundo = await fetchBuf(urls.fundo).catch(() => null);
+            if (urls.logo)  existing.logo  = await fetchBuf(urls.logo).catch(() => null);
+        }
+
+        console.log(`[Retry] ${proj.name}: refazendo ${items.join(', ')}`);
+        const extras = await generateKitExtras({
+            invitation,
+            childPhoto: req.files?.photos?.[0]?.buffer || null,
+            themeText: proj.theme,
+            palette: null,
+            name: proj.name,
+            age: proj.age,
+            gender: ['m', 'f'].includes(req.body.gender) ? req.body.gender : (proj.gender || 'f'),   // a coluna gender não existe no banco: vem do formulário
+            project: { date: proj.date, time: proj.time, location: proj.location },
+            only: items,
+            existing,
+            provider: urls.kit_provider || null,
+        });
+
+        // Mesma pasta da geração original; o carimbo na URL evita devolver a imagem antiga pelo cache
+        const saved = await saveKitExtras(extras, req.params.projectId);
+        const http = u => (u && /^https?:/.test(u)) ? u : null;
+        const merged = { ...urls };
+        for (const k of Object.keys(saved.urls)) if (http(saved.urls[k])) merged[k] = saved.urls[k];
+        try { await supabaseAdmin.from('projects').update({ assets_urls: merged }).eq('id', req.params.projectId); } catch (_) { /* segue sem salvar */ }
+
+        const t = Date.now();
+        const bust = (u) => (u && u.startsWith('http') ? `${u}?t=${t}` : u);
+        res.json({
+            assetsUrls: {
+                mascote: bust(saved.urls.mascote), elementos: bust(saved.urls.elementos), fundo: bust(saved.urls.fundo),
+                papel: bust(saved.urls.papel), logo: bust(saved.urls.logo), lembretePreview: bust(saved.urls.lembrete),
+                brasao: bust(saved.urls.brasao), lembrancinha: bust(saved.urls.lembrancinha),
+            },
+            kit: items.includes('elementos') ? saved.kit : null,
+            kitMissing: extras.missing || [],
+            kitQuota: !!extras.quota,
+        });
+    } catch (err) {
+        console.error('[Retry] Erro:', err.message);
+        res.status(500).json({ error: 'Não foi possível refazer os itens agora.' });
     }
 });
 

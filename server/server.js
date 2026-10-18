@@ -32,14 +32,20 @@ app.use(cors({
 app.use(express.json({ limit: '50mb' }));
 app.use(express.urlencoded({ extended: true, limit: '50mb' }));
 
-// Serve o frontend estático (pasta raiz do projeto)
+// Serve SÓ o frontend público. Nunca a pasta raiz inteira: ela contém server/.env (chaves de API),
+// o código do servidor, a pasta .git e arquivos de teste com fotos.
 const frontendPath = path.join(__dirname, '..');
-app.use(express.static(frontendPath, {
-    index: 'index.html',
-    // Não servir arquivos da pasta server/
-    setHeaders: (res) => {
-        res.setHeader('Cache-Control', 'no-cache');
-    }
+const sendPublic = (file) => (req, res) => {
+    res.setHeader('Cache-Control', 'no-cache');
+    res.sendFile(path.join(frontendPath, file));
+};
+app.get('/', sendPublic('index.html'));
+app.get('/index.html', sendPublic('index.html'));
+app.get('/app.js', sendPublic('app.js'));
+app.get('/styles.css', sendPublic('styles.css'));
+app.use('/assets', express.static(path.join(frontendPath, 'assets'), {
+    dotfiles: 'deny',
+    setHeaders: (res) => res.setHeader('Cache-Control', 'no-cache'),
 }));
 
 // ---------------------------------------------------------------------------
@@ -90,8 +96,8 @@ app.listen(PORT, async () => {
     console.log(`✅ Servidor rodando em: http://localhost:${PORT}`);
     console.log(`📁 Frontend servido de: ${frontendPath}`);
     console.log(`🔑 Supabase: ${process.env.SUPABASE_URL ? 'Configurado' : '⚠️  NÃO configurado'}`);
-    console.log(`🤖 IA (Replicate): ${process.env.REPLICATE_API_TOKEN ? 'Configurado' : '⚠️  NÃO configurado'}`);
-    console.log(`🤖 IA (OpenAI): ${process.env.OPENAI_API_KEY ? 'Configurado' : 'Não configurado'}`);
+    console.log(`🤖 IA (Gemini): ${process.env.GEMINI_API_KEY ? 'Configurado (principal)' : 'Não configurado'}`);
+    console.log(`🤖 IA (OpenAI): ${process.env.OPENAI_API_KEY ? 'Configurado (visão, conferência e reserva)' : 'Não configurado'}`);
 
     if (process.env.SUPABASE_URL) {
         ensureBucketExists().catch(() => {});

@@ -203,11 +203,43 @@ function drawPlaqueBadge(ctx, text, x, y, width, height, bgColor = '#DFBA73', te
     ctx.restore();
 }
 
+/** Desenha a imagem preenchendo o canvas sem distorcer (recorta o excesso, centralizado) */
+function drawCover(ctx, img, W, H) {
+    const scale = Math.max(W / img.width, H / img.height);
+    const dw = img.width * scale;
+    const dh = img.height * scale;
+    ctx.drawImage(img, (W - dw) / 2, (H - dh) / 2, dw, dh);
+}
+
 // ---------------------------------------------------------------------------
 // Renderizador do Convite
 // ---------------------------------------------------------------------------
-async function renderConvite(project, bgSource, watermark = false, aiDna = null) {
+/** Arte nativa da IA: mantém a proporção original da imagem (largura 2480px), sem recortar nem esticar */
+async function renderNativeArt(bgSource, watermark) {
+    const mimeType = bgSource[0] === 0xFF ? 'image/jpeg' : 'image/png';
+    const img = await loadImage(`data:${mimeType};base64,${bgSource.toString('base64')}`);
+    const W = A4_WIDTH;
+    const H = Math.round(W * img.height / img.width);
+    const canvas = createCanvas(W, H);
+    const ctx = canvas.getContext('2d');
+    ctx.drawImage(img, 0, 0, W, H);
+    if (watermark) applyWatermark(ctx, W, H);
+    console.log(`[Renderer] Convite finalizado (arte nativa ${W}x${H}, sem recorte e sem overlay).`);
+    return canvas.encode('png');
+}
+
+// overlayInfo=false (padrão): a IA já desenha nome, idade, data, horário e endereço na própria arte.
+// overlayInfo=true: sobrepõe data/horário/local via canvas (uso só como plano B).
+async function renderConvite(project, bgSource, watermark = false, aiDna = null, overlayInfo = false) {
     console.log(`[Renderer] Renderizando convite de luxo para "${project.name}"...`);
+
+    if (!overlayInfo) {
+        try {
+            return await renderNativeArt(bgSource, watermark);
+        } catch (bgErr) {
+            console.warn('[Renderer] Falha ao carregar a arte, usando layout de reserva:', bgErr.message);
+        }
+    }
 
     const W = A4_WIDTH;
     const H = A4_HEIGHT;
@@ -221,12 +253,18 @@ async function renderConvite(project, bgSource, watermark = false, aiDna = null)
         const mimeType = bgSource[0] === 0xFF ? 'image/jpeg' : 'image/png';
         const dataUrl  = `data:${mimeType};base64,${bgSource.toString('base64')}`;
         const bgImg    = await loadImage(dataUrl);
-        ctx.drawImage(bgImg, 0, 0, W, H);
+        drawCover(ctx, bgImg, W, H);
         console.log(`[Renderer] Fundo carregado: ${W}x${H}`);
     } catch (bgErr) {
         console.warn('[Renderer] Falha ao carregar fundo, usando cor sólida:', bgErr.message);
         ctx.fillStyle = '#FBE1EC';
         ctx.fillRect(0, 0, W, H);
+    }
+
+    if (!overlayInfo) {
+        if (watermark) applyWatermark(ctx, W, H);
+        console.log('[Renderer] Convite finalizado (arte nativa da IA, sem overlay).');
+        return canvas.encode('png');
     }
 
     const cx = W / 2;
@@ -244,57 +282,31 @@ async function renderConvite(project, bgSource, watermark = false, aiDna = null)
         }
     }
 
-    // --- Overlay branco semi-transparente para garantir leitura em fundos escuros ---
-    ctx.save();
-    ctx.fillStyle = 'rgba(255, 255, 255, 0.7)';
-    ctx.shadowColor = 'rgba(0,0,0,0.1)';
-    ctx.shadowBlur = 40;
-    ctx.beginPath();
-    ctx.roundRect(W * 0.1, y - 100, W * 0.8, TEXT_AREA_HEIGHT - 300, 40);
-    ctx.fill();
-    ctx.restore();
+    // --- Overlay branco removido para não cobrir a arte nativa ---
+    // ctx.save();
+    // ctx.fillStyle = 'rgba(255, 255, 255, 0.7)';
+    // ...
+    // ctx.restore();
 
-    // 1. Frase de abertura neutra
-    drawText(ctx, 'Você está sendo convidado para a...', cx, y, `62px ${baseFont}`, '#444444');
-    y += 180;
-
-    // 2. Placa temática neutra e legível
-    const themeLabel = project.theme ? `${project.theme} do(a)` : 'A Grande Festa de';
-    drawPlaqueBadge(ctx, themeLabel, cx, y, Math.min(W * 0.65, 1200), 140, '#333333', '#FFFFFF');
-    y += 260;
-
-    // 3. Nome da criança em destaque monumental (lettering bold neutro)
-    const nameFontSize = project.name && project.name.length > 10 ? 190 : 230;
-    ctx.save();
-    ctx.font = `bold ${nameFontSize}px ${baseFont}`;
-    ctx.textAlign = 'center';
-    ctx.textBaseline = 'middle';
-    
-    // Sombra pesada para descolar do fundo
-    ctx.shadowColor = 'rgba(0,0,0,0.3)';
-    ctx.shadowBlur = 15;
-    ctx.shadowOffsetY = 10;
-
-    // Preenchimento nobre e escuro
-    ctx.fillStyle = c.primary;
-    ctx.fillText(project.name || '', cx, y);
-    ctx.restore();
-    y += nameFontSize * 0.65 + 70;
-
-    // 4. Idade em destaque com ornamentos
-    if (project.age) {
-        drawText(ctx, `—   ${project.age.toUpperCase()}   —`, cx, y, `bold 74px ${baseFont}`, '#555555');
-        y += 150;
-    }
-
-    // Linha divisória sutil
-    drawDivider(ctx, y, c.divider, W * 0.8, 3);
-    y += 120;
+    // Omitimos a frase de abertura, tema, nome e idade aqui
+    // porque agora a IA (FLUX/DALL-E) desenha o Nome e Idade em formato 3D gigante nativamente no fundo!
+    // Pular Y direto para a área inferior da arte (onde não há elementos principais da IA)
+    y = H * 0.75; // Pula para os últimos 25% inferiores da folha A4
 
     // 5. Bloco de informações com ícones ilustrados grandes (Data, Horário, Local)
     const iconColor = c.accent || '#444444';
     const blockX = cx - 360; // Ponto de início do bloco à esquerda
     const iconSize = 84;
+
+    // Placa de fundo para o texto de endereço ficar super legível
+    ctx.save();
+    ctx.fillStyle = 'rgba(255, 255, 255, 0.9)';
+    ctx.shadowColor = 'rgba(0,0,0,0.2)';
+    ctx.shadowBlur = 20;
+    ctx.beginPath();
+    ctx.roundRect(W * 0.15, y - 80, W * 0.7, 500, 30);
+    ctx.fill();
+    ctx.restore();
 
     // Data
     if (project.date) {
@@ -338,7 +350,8 @@ async function renderConvite(project, bgSource, watermark = false, aiDna = null)
 
     // 6. Plaquinha de rodapé com poste de madeira (estilo placa de chão da Betina)
     const footerPhrase = project.phrase || 'Sua presença é o maior presente!';
-    const footerY = 3220;
+    // Fix footerY to always be at the bottom relative to A4_HEIGHT
+    const footerY = H - 250;
 
     // Poste de madeira embaixo da placa
     ctx.save();
@@ -382,7 +395,7 @@ async function renderLembrete(project, bgSource, watermark = false, aiDna = null
         const mimeType = bgSource[0] === 0xFF ? 'image/jpeg' : 'image/png';
         const dataUrl  = `data:${mimeType};base64,${bgSource.toString('base64')}`;
         const bgImg    = await loadImage(dataUrl);
-        ctx.drawImage(bgImg, 0, 0, W, H);
+        drawCover(ctx, bgImg, W, H);
     } catch (bgErr) {
         console.warn('[Renderer/Lembrete] Falha ao carregar fundo:', bgErr.message);
         ctx.fillStyle = '#FBE1EC';
@@ -501,15 +514,19 @@ function applyWatermark(ctx, W, H) {
 // Converte PNG Buffer em PDF A4
 // ---------------------------------------------------------------------------
 async function pngToPdf(pngBuffer) {
+    // Página com a mesma proporção da imagem (300 DPI -> 72 pt), sem esticar nem cortar
+    const meta = await sharp(pngBuffer).metadata();
+    const pageW = meta.width  * 72 / 300;
+    const pageH = meta.height * 72 / 300;
     return new Promise((resolve, reject) => {
-        const doc    = new PDFDocument({ size: 'A4', margin: 0 });
+        const doc    = new PDFDocument({ size: [pageW, pageH], margin: 0 });
         const chunks = [];
 
         doc.on('data',  (chunk) => chunks.push(chunk));
         doc.on('end',   () => resolve(Buffer.concat(chunks)));
         doc.on('error', reject);
 
-        doc.image(pngBuffer, 0, 0, { width: doc.page.width, height: doc.page.height });
+        doc.image(pngBuffer, 0, 0, { width: pageW, height: pageH });
         doc.end();
     });
 }
@@ -525,6 +542,7 @@ async function createThumbnail(pngBuffer, width = 600) {
 }
 
 module.exports = {
+    renderNativeArt,
     renderConvite,
     renderLembrete,
     pngToPdf,

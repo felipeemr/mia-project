@@ -76,9 +76,7 @@
                             <span class="hero-badge-pill">⏰ Lembrete de festa</span>
                             <span class="hero-badge-pill">🎈 Logotipo da festa</span>
                             <span class="hero-badge-pill">⚜️ Brasão oficial</span>
-                            <span class="hero-badge-pill">⭕ Monograma</span>
                             <span class="hero-badge-pill">🎨 Paleta de cores</span>
-                            <span class="hero-badge-pill">🔤 Fontes principais</span>
                             <span class="hero-badge-pill">🧸 Mascote aquarelado</span>
                             <span class="hero-badge-pill">🌿 Elementos avulsos</span>
                             <span class="hero-badge-pill">🌅 Fundo personalizado</span>
@@ -94,7 +92,7 @@
                     <div class="hero-right-mockups">
                         <div class="mockup-layered-card card-1" onclick="showView('generator')">
                             <img src="assets/girl_1.jpg" alt="Mascote">
-                            <span class="card-caption-label">Helena 5 anos</span>
+                            <span class="card-caption-label">Exemplo de mascote</span>
                         </div>
                         <div class="mockup-layered-card card-2">
                             <img src="assets/infantil_bg.jpg" alt="Fundo Aquarela">
@@ -147,7 +145,7 @@
                                     <span class="timeline-card-badge">4</span>
                                     <div class="timeline-card-info">
                                         <h5>Prévia Completa</h5>
-                                        <p>Veja todos os 15 itens da sua papelaria com marca d'água.</p>
+                                        <p>Veja todos os 12 itens da sua papelaria com marca d'água.</p>
                                     </div>
                                 </div>
                             </div>
@@ -158,15 +156,15 @@
                             <h4 class="collage-section-title">Estilos Sugeridos</h4>
                             
                             <div class="thumbs-collage-grid">
-                                <div class="thumb-preview-card" onclick="prefillAndGenerate('infantil')">
+                                <div class="thumb-preview-card" onclick="selectPartyType('infantil')">
                                     <img src="assets/infantil_bg.jpg" alt="Jardim">
                                     <span class="thumb-label">Jardim</span>
                                 </div>
-                                <div class="thumb-preview-card" onclick="prefillAndGenerate('debutante')">
+                                <div class="thumb-preview-card" onclick="selectPartyType('debutante')">
                                     <img src="assets/debutante_bg.jpg" alt="Princesa">
                                     <span class="thumb-label">Princesa</span>
                                 </div>
-                                <div class="thumb-preview-card" onclick="prefillAndGenerate('adulto')">
+                                <div class="thumb-preview-card" onclick="selectPartyType('adulto')">
                                     <img src="assets/adulto_bg.jpg" alt="Eucalipto">
                                     <span class="thumb-label">Eucalipto</span>
                                 </div>
@@ -238,42 +236,34 @@
                                 </div>
                                 <div class="delivery-item-box">
                                     <span class="delivery-number-badge">05</span>
-                                    <span><strong>Monograma</strong> (Arquivo separado)</span>
-                                </div>
-                                <div class="delivery-item-box">
-                                    <span class="delivery-number-badge">06</span>
                                     <span><strong>Paleta de Cores</strong> (Amostragem oficial)</span>
                                 </div>
                                 <div class="delivery-item-box">
-                                    <span class="delivery-number-badge">07</span>
-                                    <span><strong>Tipografias Principais</strong> (Fontes recomendadas)</span>
-                                </div>
-                                <div class="delivery-item-box">
-                                    <span class="delivery-number-badge">08</span>
+                                    <span class="delivery-number-badge">06</span>
                                     <span><strong>Elementos Principais</strong> (Animais/Destaques avulsos)</span>
                                 </div>
                                 <div class="delivery-item-box">
-                                    <span class="delivery-number-badge">09</span>
+                                    <span class="delivery-number-badge">07</span>
                                     <span><strong>Elementos Complementares</strong> (Ramos/Borboletas avulsos)</span>
                                 </div>
                                 <div class="delivery-item-box">
-                                    <span class="delivery-number-badge">10</span>
+                                    <span class="delivery-number-badge">08</span>
                                     <span><strong>Mascote Principal</strong> (Personagem personalizado)</span>
                                 </div>
                                 <div class="delivery-item-box">
-                                    <span class="delivery-number-badge">11</span>
-                                    <span><strong>Ilustrações do Tema</strong> (Guirlandas e fitas)</span>
-                                </div>
-                                <div class="delivery-item-box">
-                                    <span class="delivery-number-badge">12</span>
+                                    <span class="delivery-number-badge">09</span>
                                     <span><strong>Fundo Personalizado</strong> (Sem nenhum texto)</span>
                                 </div>
                                 <div class="delivery-item-box">
-                                    <span class="delivery-number-badge">13</span>
+                                    <span class="delivery-number-badge">10</span>
+                                    <span><strong>Arte para Lembrancinha</strong> (Logotipo + agradecimento)</span>
+                                </div>
+                                <div class="delivery-item-box">
+                                    <span class="delivery-number-badge">11</span>
                                     <span><strong>Papel Digital</strong> (Estampa repetitiva limpa)</span>
                                 </div>
                                 <div class="delivery-item-box">
-                                    <span class="delivery-number-badge">14</span>
+                                    <span class="delivery-number-badge">12</span>
                                     <span><strong>Prancha Geral de Elementos</strong> (Tudo junto para recorte)</span>
                                 </div>
                             </div>
@@ -340,49 +330,53 @@
                             <button type="button" class="btn btn-secondary btn-block" onclick="nextStep(2)">Avançar: Dados da Festa ➔</button>
                         </div>
 
-                        <!-- STEP 2: Basic Inputs (Pre-filled by default) -->
+                        <!-- STEP 2: Dados da festa (todos obrigatórios, sem valores pré-preenchidos) -->
                         <div class="form-step" id="form-step-2" style="display: none;">
                             <span class="form-question-label">Preencha os dados básicos:</span>
                             
                             <div class="form-input-row-2">
                                 <div class="form-field-group">
                                     <label for="partyName" id="label-party-name">Nome da criança</label>
-                                    <input type="text" id="partyName" value="Helena" required>
+                                    <input type="text" id="partyName" placeholder="Nome de quem faz aniversário" required>
                                 </div>
                                 <div class="form-field-group" id="group-party-age">
                                     <label for="partyAge">Idade</label>
-                                    <input type="text" id="partyAge" value="5 anos">
+                                    <input type="text" id="partyAge" placeholder="Ex.: 10 anos" required>
                                 </div>
+                            </div>
+
+                            <div class="form-field-group" id="group-party-gender">
+                                <label>Menino ou menina?</label>
+                                <div style="display:flex; gap:22px; margin-top:6px;">
+                                    <label style="display:flex; align-items:center; gap:6px; cursor:pointer;"><input type="radio" name="partyGender" value="m" required> Menino</label>
+                                    <label style="display:flex; align-items:center; gap:6px; cursor:pointer;"><input type="radio" name="partyGender" value="f" required> Menina</label>
+                                </div>
+                                <small style="display:block; color:var(--gray-muted); font-size:0.7rem; margin-top:4px;">Usado para escrever "Obrigado" ou "Obrigada" na lembrancinha.</small>
                             </div>
 
                             <div class="form-input-row-2">
                                 <div class="form-field-group">
                                     <label for="partyDate">Data da festa</label>
-                                    <input type="date" id="partyDate" value="2026-10-12" required>
+                                    <input type="date" id="partyDate" required>
                                 </div>
                                 <div class="form-field-group">
                                     <label for="partyTheme">Tema ou estilo</label>
-                                    <input type="text" id="partyTheme" value="Jardim Encantado" required>
+                                    <input type="text" id="partyTheme" placeholder="Ex.: Super-heróis, Safari, Princesas" required>
                                 </div>
                             </div>
 
                             <div class="form-field-group">
                                 <label for="partyTime">Horário</label>
-                                <input type="time" id="partyTime" value="15:30" required>
+                                <input type="time" id="partyTime" required>
                             </div>
 
                             <div class="form-field-group">
                                 <label for="partyLocation">Local / Endereço</label>
-                                <input type="text" id="partyLocation" value="Buffet Jardim Secreto, Av. das Américas, 500" required>
-                            </div>
-
-                            <div class="form-field-group">
-                                <label for="partyInvitePhrase">Frase do Convite (Opcional)</label>
-                                <input type="text" id="partyInvitePhrase" value="Venha viver essa aventura no meu Jardim Encantado!">
+                                <input type="text" id="partyLocation" placeholder="Rua, número, bairro e cidade" required>
                             </div>
 
                             <div class="form-navigation">
-                                <button type="button" class="btn btn-secondary outline" onclick="prevStep(1)">➔ Voltar</button>
+                                <button type="button" class="btn btn-secondary outline" onclick="prevStep(1)">← Voltar</button>
                                 <button type="button" class="btn btn-primary" onclick="nextStep(3)">Avançar ➔</button>
                             </div>
                         </div>
@@ -391,10 +385,10 @@
                         <div class="form-step" id="form-step-3" style="display: none;">
                             
                             <div class="photos-collage-upload-box">
-                                <label id="label-photos-upload">Envie fotos da criança (para personalização do mascote por visão computacional)</label>
-                                <input type="file" id="userPhotosInput" accept="image/*" multiple style="display:none;" onchange="handleUserPhotosSelected(event)">
+                                <label id="label-photos-upload">Envie 1 foto da criança (obrigatória)</label>
+                                <input type="file" id="userPhotosInput" accept="image/*" style="display:none;" onchange="handleUserPhotosSelected(event)">
                                 <div class="thumbs-collage-row" id="user-photos-thumbs">
-                                    <div class="dashed-plus-upload-btn" onclick="document.getElementById('userPhotosInput').click()">
+                                    <div class="dashed-plus-upload-btn" id="user-photo-add-btn" onclick="document.getElementById('userPhotosInput').click()">
                                         <span>+</span>
                                         <span style="font-size: 0.65rem; display: block;">Enviar Foto</span>
                                     </div>
@@ -415,7 +409,7 @@
 
                             <div class="form-field-group">
                                 <label for="partyNotes">Quer pedir alguma coisa específica? (opcional)</label>
-                                <textarea id="partyNotes" rows="3" placeholder="Ex: Quero tons de verde-água e cor-de-rosa delicados..."></textarea>
+                                <textarea id="partyNotes" rows="3" placeholder="Escreva aqui o que você gostaria de ver na arte"></textarea>
                             </div>
 
                             <div class="generation-warning-box margin-top-sm" id="client-limit-warning" style="font-size:0.75rem; color:var(--gray-muted); margin-bottom: 12px;">
@@ -423,7 +417,7 @@
                             </div>
 
                             <div class="form-navigation">
-                                <button type="button" class="btn btn-secondary outline" onclick="prevStep(2)">➔ Voltar</button>
+                                <button type="button" class="btn btn-secondary outline" onclick="prevStep(2)">← Voltar</button>
                                 <button type="submit" class="btn-teal-gradient" id="btn-submit-generator">CRIAR MINHA IDENTIDADE ✨</button>
                             </div>
                         </div>
@@ -450,7 +444,7 @@
                         
                         <div class="generating-tips">
                             <div class="gen-tip-item active">💡 Nossos convites virtuais utilizam fontes reais vetorizadas em cima do fundo da IA para garantir a nitidez na hora de imprimir ou enviar.</div>
-                            <div class="gen-tip-item">💡 Você visualizará todas as 15 peças do kit antes de comprar.</div>
+                            <div class="gen-tip-item">💡 Você visualizará todas as 12 peças do kit antes de comprar.</div>
                         </div>
                     </div>
                 </div>
@@ -468,8 +462,18 @@
                     <div class="watermark-notice-banner" id="watermark-notice">
                         <span class="notice-icon">🔒</span>
                         <div class="notice-text">
-                            <h4>Esta é uma prévia completa (15 itens com marca d'água)</h4>
+                            <h4>Esta é uma prévia completa do seu kit (com marca d'água)</h4>
                             <p>Desça a página para conferir todas as peças geradas para a sua festa. Clique em Comprar para liberar os arquivos limpos.</p>
+                        </div>
+                    </div>
+
+                    <!-- Aviso quando algum item do kit não foi gerado -->
+                    <div class="watermark-notice-banner" id="kit-missing-notice" style="display:none; background:#fff6e5; border-color:#f0c36d;">
+                        <span class="notice-icon">⚠️</span>
+                        <div class="notice-text">
+                            <h4 id="kit-missing-title">Alguns itens do kit não puderam ser gerados</h4>
+                            <p id="kit-missing-text"></p>
+                            <button class="btn btn-secondary" id="kit-retry-btn" style="margin-top:8px;" onclick="retryMissingKit()">🔄 Tentar de novo os itens que faltam</button>
                         </div>
                     </div>
 
@@ -493,10 +497,10 @@
                         <!-- 01. CONVITE PRINCIPAL (Text pushed up to prevent character overlapping) -->
                         <div class="preview-card-wrapper">
                             <div class="prominent-highlight-badge">01. Convite Principal Retrato</div>
-                            <p style="font-size:0.75rem; color:var(--gray-muted); margin-bottom:12px;">Preenchido em alta definição sobre fundo aquarelado gerado.</p>
+                            <p style="font-size:0.75rem; color:var(--gray-muted); margin-bottom:12px;">Arte gerada para a sua festa, com os dados que você informou.</p>
                             
                             <div class="invitation-container-mock watermarked" id="invite-mock-container">
-                                <img src="assets/infantil_bg.jpg" alt="Fundo Convite" class="invite-bg" id="invite-bg-image">
+                                <img src="data:image/gif;base64,R0lGODlhAQABAAAAACH5BAEKAAEALAAAAAABAAEAAAICTAEAOw==" alt="Fundo Convite" class="invite-bg result-img" id="invite-bg-image">
                                 
                                 <div class="watermark-pattern-layer">
                                     <span>PRÉVIA MERAKI</span>
@@ -507,34 +511,13 @@
                         </div>
 
                         <!-- 02. LEMBRETE DA FESTA (Matches Invitation Background & design layout, Text pushed up) -->
-                        <div class="preview-card-wrapper">
+                        <div class="preview-card-wrapper" id="reminder-card" style="display:none;">
                             <div class="prominent-highlight-badge">02. Lembrete da Festa (RSVP)</div>
-                            <p style="font-size:0.75rem; color:var(--gray-muted); margin-bottom:12px;">WhatsApp Countdown Card - Lembrete com fundo idêntico ao convite.</p>
+                            <p style="font-size:0.75rem; color:var(--gray-muted); margin-bottom:12px;">Card de contagem regressiva para enviar por WhatsApp, no mesmo estilo do convite.</p>
                             
                             <div class="reminder-container-mock watermarked" id="reminder-mock-container">
-                                <img src="assets/infantil_bg.jpg" alt="Fundo Lembrete" class="invite-bg" id="reminder-bg-image">
+                                <img src="data:image/gif;base64,R0lGODlhAQABAAAAACH5BAEKAAEALAAAAAABAAEAAAICTAEAOw==" alt="Fundo Lembrete" class="invite-bg result-img" id="reminder-bg-image">
                                 
-                                <div class="reminder-overlay">
-                                    <span class="rem-top-tag">LEMBRETE</span>
-                                    
-                                    <p class="rem-body-text">
-                                        Faltam apenas <span class="rem-days-highlight">5 dias</span> para a minha festa e você não pode perder!
-                                    </p>
-                                    
-                                    <h4 class="rem-name" id="reminder-val-name">Helena</h4>
-                                    <p class="rem-age" id="reminder-val-age">5 anos</p>
-                                    
-                                    <div class="rem-date-circle">
-                                        <span class="rem-day" id="reminder-val-day">12</span>
-                                        <span class="rem-month" id="reminder-val-month">OUT</span>
-                                    </div>
-                                    
-                                    <p class="rem-footer-details">
-                                        <span id="reminder-val-time">15:30h</span> - 
-                                        <span id="reminder-val-location">Buffet Jardim Secreto</span>
-                                    </p>
-                                </div>
-
                                 <div class="watermark-pattern-layer">
                                     <span>PRÉVIA MERAKI</span>
                                     <span>PRÉVIA MERAKI</span>
@@ -549,16 +532,16 @@
                         </div>
 
                         <!-- 03. MASCOTE OFICIAL (MUITO IMPORTANTE - ARQUIVO SEPARADO) -->
-                        <div class="preview-card-wrapper">
+                        <div class="preview-card-wrapper" id="mascot-card" style="display:none;">
                             <div class="prominent-highlight-badge">03. Mascote Oficial do(a) Aniversariante</div>
-                            <p style="font-size:0.75rem; color:var(--gray-muted); margin-bottom:12px;">Ilustração de mascote individual em aquarela suave gerada separadamente.</p>
+                            <p style="font-size:0.75rem; color:var(--gray-muted); margin-bottom:12px;">Ilustração do aniversariante como personagem, gerada separadamente.</p>
                             
                             <div class="mascot-showcase-box watermarked" id="mascot-showcase-container">
                                 <div class="mascot-frame-watercolor">
-                                    <img src="assets/girl_1.jpg" alt="Mascote" id="mascot-img-render">
+                                    <img src="data:image/gif;base64,R0lGODlhAQABAAAAACH5BAEKAAEALAAAAAABAAEAAAICTAEAOw==" alt="Mascote" class="result-img" id="mascot-img-render">
                                 </div>
                                 <div class="mascot-meta-info">
-                                    <h4 id="mascot-val-title">Mascote Helena</h4>
+                                    <h4 id="mascot-val-title"></h4>
                                     <p>Estilo personalizado 100% fiel ao tema</p>
                                 </div>
 
@@ -569,12 +552,12 @@
                         </div>
 
                         <!-- 04. PRANCHA GERAL DE ELEMENTOS SEPARADOS -->
-                        <div class="preview-card-wrapper">
+                        <div class="preview-card-wrapper" id="elements-sheet-card" style="display:none;">
                             <div class="prominent-highlight-badge">04. Prancha Geral de Elementos Separados</div>
                             <p style="font-size:0.75rem; color:var(--gray-muted); margin-bottom:12px;">Grelha com todos os elementos juntos recortados sobrepostos.</p>
                             
                             <div class="elements-sheet-mock watermarked" id="elements-sheet-mock-container">
-                                <img src="assets/elementos_sheet.jpg" alt="Prancha Elementos" class="elements-sheet-img">
+                                <img src="data:image/gif;base64,R0lGODlhAQABAAAAACH5BAEKAAEALAAAAAABAAEAAAICTAEAOw==" alt="Prancha Elementos" class="elements-sheet-img result-img">
                                 <div class="watermark-pattern-layer">
                                     <span>PRÉVIA MERAKI</span>
                                     <span>PRÉVIA MERAKI</span>
@@ -583,62 +566,19 @@
                         </div>
 
                         <!-- 05. ELEMENTOS PRINCIPAIS (ARQUIVO SEPARADO) -->
-                        <div class="preview-card-wrapper">
+                        <div class="preview-card-wrapper" id="principais-card" style="display:none;">
                             <div class="prominent-highlight-badge">05. Elementos Principais</div>
-                            <p style="font-size:0.75rem; color:var(--gray-muted); margin-bottom:12px;">Os elementos artísticos principais gerados individualmente em arquivos isolados.</p>
-                            
-                            <div class="branding-items-grid margin-top-sm">
-                                <div class="brand-item-box watermarked">
-                                    <h5>Elemento Destaque 1</h5>
-                                    <div style="font-size: 3rem; padding: 10px;" id="ui-elem-0-emoji">🦌</div>
-                                    <span style="font-size: 0.7rem; color:var(--gray-muted);" id="ui-elem-0-name">Cervinho Florestal</span>
-                                    <div class="watermark-pattern-layer"><span>PRÉVIA</span></div>
-                                </div>
-                                <div class="brand-item-box watermarked">
-                                    <h5>Elemento Destaque 2</h5>
-                                    <div style="font-size: 3rem; padding: 10px;" id="ui-elem-1-emoji">🐰</div>
-                                    <span style="font-size: 0.7rem; color:var(--gray-muted);" id="ui-elem-1-name">Coelhinho Fofo</span>
-                                    <div class="watermark-pattern-layer"><span>PRÉVIA</span></div>
-                                </div>
-                            </div>
+                            <p style="font-size:0.75rem; color:var(--gray-muted); margin-bottom:12px;">Os elementos artísticos principais do seu tema, em arquivos isolados com fundo transparente.</p>
+
+                            <div class="branding-items-grid margin-top-sm" id="kit-principais-grid"></div>
                         </div>
 
                         <!-- 06. ELEMENTOS COMPLEMENTARES (ARQUIVO SEPARADO) -->
-                        <div class="preview-card-wrapper">
+                        <div class="preview-card-wrapper" id="complementares-card" style="display:none;">
                             <div class="prominent-highlight-badge">06. Elementos Complementares</div>
-                            <p style="font-size:0.75rem; color:var(--gray-muted); margin-bottom:12px;">Pequenos adornos recortados isolados para aplicação.</p>
-                            
-                            <div class="branding-items-grid margin-top-sm" style="grid-template-columns: repeat(3, 1fr);">
-                                <div class="brand-item-box watermarked">
-                                    <div style="font-size: 2.2rem;" id="ui-elem-2-emoji">🦋</div>
-                                    <span style="font-size: 0.65rem; color:var(--gray-muted);" id="ui-elem-2-name">Borboleta</span>
-                                    <div class="watermark-pattern-layer"><span>PRÉVIA</span></div>
-                                </div>
-                                <div class="brand-item-box watermarked">
-                                    <div style="font-size: 2.2rem;" id="ui-elem-3-emoji">🌸</div>
-                                    <span style="font-size: 0.65rem; color:var(--gray-muted);" id="ui-elem-3-name">Floral</span>
-                                    <div class="watermark-pattern-layer"><span>PRÉVIA</span></div>
-                                </div>
-                                <div class="brand-item-box watermarked">
-                                    <div style="font-size: 2.2rem;" id="ui-elem-4-emoji">🎀</div>
-                                    <span style="font-size: 0.65rem; color:var(--gray-muted);" id="ui-elem-4-name">Laço</span>
-                                    <div class="watermark-pattern-layer"><span>PRÉVIA</span></div>
-                                </div>
-                            </div>
-                        </div>
+                            <p style="font-size:0.75rem; color:var(--gray-muted); margin-bottom:12px;">Pequenos adornos do seu tema, recortados e isolados para aplicação.</p>
 
-                        <!-- 07. ILUSTRAÇÕES DO TEMA (ARQUIVO SEPARADO) -->
-                        <div class="preview-card-wrapper">
-                            <div class="prominent-highlight-badge">07. Ilustrações do Tema</div>
-                            <p style="font-size:0.75rem; color:var(--gray-muted); margin-bottom:12px;">Molduras de fundo e fitas isoladas para decorações secundárias.</p>
-                            
-                            <div class="brand-item-box watermarked" style="padding:24px;">
-                                <div style="border: 2px dashed var(--teal-secondary); border-radius: 12px; padding: 20px; color: var(--pink-dark); font-family: var(--font-cursive); font-size:1.8rem;">
-                                    Guirlanda Aquarela Flora
-                                </div>
-                                <span style="font-size:0.7rem; color:var(--gray-muted); display:block; margin-top:8px;">Fita decorativa com flores suspensas</span>
-                                <div class="watermark-pattern-layer"><span>PRÉVIA MERAKI</span></div>
-                            </div>
+                            <div class="branding-items-grid margin-top-sm" id="kit-complementares-grid" style="grid-template-columns: repeat(3, 1fr);"></div>
                         </div>
 
                         <!-- SECTION 3: PAPÉIS E FUNDOS -->
@@ -648,12 +588,25 @@
                         </div>
 
                         <!-- 08. FUNDO PERSONALIZADO (ARQUIVO SEPARADO SEM TEXTO) -->
-                        <div class="preview-card-wrapper">
-                            <div class="prominent-highlight-badge">08. Fundo Personalizado Limpo</div>
-                            <p style="font-size:0.75rem; color:var(--gray-muted); margin-bottom:12px;">A arte aquarelada de fundo do convite limpa, sem textos, para uso em painéis físicos.</p>
+                        <div class="preview-card-wrapper" id="bg-card" style="display:none;">
+                            <div class="prominent-highlight-badge">07. Fundo Personalizado Limpo</div>
+                            <p style="font-size:0.75rem; color:var(--gray-muted); margin-bottom:12px;">O cenário do convite limpo, sem textos, para uso em painéis físicos.</p>
                             
-                            <div class="digital-paper-container watermarked" id="bg-custom-container" style="aspect-ratio:3/4;">
-                                <img src="assets/infantil_bg.jpg" alt="Fundo Limpo" class="invite-bg" id="custom-bg-render">
+                            <div class="digital-paper-container watermarked" id="bg-custom-container" style="aspect-ratio:2/3;">
+                                <img src="data:image/gif;base64,R0lGODlhAQABAAAAACH5BAEKAAEALAAAAAABAAEAAAICTAEAOw==" alt="Fundo Limpo" class="invite-bg result-img" id="custom-bg-render">
+                                <div class="watermark-pattern-layer">
+                                    <span>PRÉVIA MERAKI</span>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- 08. LEMBRANCINHA (fundo limpo quadrado + logotipo + agradecimento) -->
+                        <div class="preview-card-wrapper" id="lembrancinha-card" style="display:none;">
+                            <div class="prominent-highlight-badge">08. Arte para Lembrancinha</div>
+                            <p style="font-size:0.75rem; color:var(--gray-muted); margin-bottom:12px;">Arte quadrada com o logotipo da festa e o agradecimento, para tags, adesivos e caixinhas de lembrancinha.</p>
+
+                            <div class="digital-paper-container watermarked" id="lembrancinha-container" style="aspect-ratio:1/1;">
+                                <img src="data:image/gif;base64,R0lGODlhAQABAAAAACH5BAEKAAEALAAAAAABAAEAAAICTAEAOw==" alt="Arte para lembrancinha" class="invite-bg result-img" id="lembrancinha-img">
                                 <div class="watermark-pattern-layer">
                                     <span>PRÉVIA MERAKI</span>
                                 </div>
@@ -661,7 +614,7 @@
                         </div>
 
                         <!-- 09. PAPEL DIGITAL PATONADO (ARQUIVO SEPARADO) -->
-                        <div class="preview-card-wrapper">
+                        <div class="preview-card-wrapper" id="paper-card" style="display:none;">
                             <div class="prominent-highlight-badge">09. Papel Digital Estampado</div>
                             <p style="font-size:0.75rem; color:var(--gray-muted); margin-bottom:12px;">Textura repetitiva padronizada para envelopamento ou embalagens de docinhos.</p>
                             
@@ -681,14 +634,13 @@
                         </div>
 
                         <!-- 10. LOGOTIPO DA FESTA (ARQUIVO SEPARADO) -->
-                        <div class="preview-card-wrapper">
+                        <div class="preview-card-wrapper" id="logo-card" style="display:none;">
                             <div class="prominent-highlight-badge">10. Logotipo da Festa</div>
-                            <p style="font-size:0.75rem; color:var(--gray-muted); margin-bottom:12px;">Marca escrita temática da festa com fontes combinantes.</p>
-                            
+                            <p style="font-size:0.75rem; color:var(--gray-muted); margin-bottom:12px;">O nome e a idade com as mesmas letras do título do seu convite.</p>
+
                             <div class="brand-item-box watermarked" id="logo-brand-box">
                                 <div class="logo-flex-item">
-                                    <span class="logo-text-top" id="logo-val-name">Helena</span>
-                                    <span class="logo-text-sub" id="logo-val-theme">JARDIM ENCANTADO</span>
+                                    <img id="logo-val-img" alt="Logotipo da festa" src="data:image/gif;base64,R0lGODlhAQABAAAAACH5BAEKAAEALAAAAAABAAEAAAICTAEAOw==" style="max-width:100%; max-height:140px; object-fit:contain; position:relative; z-index:1;">
                                 </div>
                                 <div class="watermark-pattern-layer">
                                     <span>PRÉVIA</span>
@@ -697,18 +649,13 @@
                         </div>
 
                         <!-- 11. BRASÃO OFICIAL (ARQUIVO SEPARADO) -->
-                        <div class="preview-card-wrapper">
+                        <div class="preview-card-wrapper" id="crest-card" style="display:none;">
                             <div class="prominent-highlight-badge">11. Brasão da Aniversariante</div>
-                            <p style="font-size:0.75rem; color:var(--gray-muted); margin-bottom:12px;">Moldura decorativa circular ou floral com a inicial.</p>
-                            
+                            <p style="font-size:0.75rem; color:var(--gray-muted); margin-bottom:12px;">Emblema do tema com a inicial do nome.</p>
+
                             <div class="brand-item-box watermarked" id="crest-box" style="max-width: 320px; margin: 0 auto;">
                                 <div class="svg-wrapper">
-                                    <svg viewBox="0 0 100 100" class="branding-svg">
-                                        <path d="M50 15 C 65 15, 80 20, 80 45 C 80 65, 50 85, 50 85 C 50 85, 20 65, 20 45 C 20 20, 35 15, 50 15 Z" fill="none" stroke="#F7A8C8" stroke-width="2"/>
-                                        <path d="M50 20 L53 27 L60 27 L55 31 L57 38 L50 34 L43 38 L45 31 L40 27 L47 27 Z" fill="#69D7D1"/>
-                                        <text x="50" y="55" font-family="'Playfair Display', serif" font-size="18" fill="#1C1C1C" text-anchor="middle" font-weight="bold" id="brand-val-initial-crest">H</text>
-                                        <text x="50" y="65" font-family="'Poppins', sans-serif" font-size="8" fill="#69D7D1" text-anchor="middle" letter-spacing="1" id="brand-val-year">2026</text>
-                                    </svg>
+                                    <img class="brand-ai-img" alt="Brasão da aniversariante" src="data:image/gif;base64,R0lGODlhAQABAAAAACH5BAEKAAEALAAAAAABAAEAAAICTAEAOw==" style="max-width:100%; max-height:190px; object-fit:contain; position:relative; z-index:1;">
                                 </div>
                                 <div class="watermark-pattern-layer">
                                     <span>PRÉVIA</span>
@@ -716,58 +663,13 @@
                             </div>
                         </div>
 
-                        <!-- 12. MONOGRAMA DE LETRAS (ARQUIVO SEPARADO) -->
-                        <div class="preview-card-wrapper">
-                            <div class="prominent-highlight-badge">12. Monograma Elegante</div>
-                            <p style="font-size:0.75rem; color:var(--gray-muted); margin-bottom:12px;">Iniciais estilizadas para adesivos e lacres de envelopes.</p>
-                            
-                            <div class="brand-item-box watermarked" id="mono-box" style="max-width: 320px; margin: 0 auto;">
-                                <div class="svg-wrapper">
-                                    <svg viewBox="0 0 100 100" class="branding-svg">
-                                        <circle cx="50" cy="50" r="40" fill="none" stroke="#69D7D1" stroke-width="2" stroke-dasharray="4 2"/>
-                                        <circle cx="50" cy="50" r="36" fill="none" stroke="#F7A8C8" stroke-width="1"/>
-                                        <text x="50" y="58" font-family="'Playfair Display', serif" font-size="28" fill="#1C1C1C" text-anchor="middle" font-weight="bold" id="brand-val-initial">H</text>
-                                        <text x="50" y="70" font-family="'Sacramento', cursive" font-size="12" fill="#F7A8C8" text-anchor="middle">Meraki</text>
-                                    </svg>
-                                </div>
-                                <div class="watermark-pattern-layer">
-                                    <span>PRÉVIA</span>
-                                </div>
-                            </div>
-                        </div>
+                        <!-- 12. PALETA DE CORES -->
+                        <div class="preview-card-wrapper" id="palette-card" style="display:none;">
+                            <div class="prominent-highlight-badge">12. Paleta de Cores Recomendada</div>
+                            <p style="font-size:0.75rem; color:var(--gray-muted); margin-bottom:12px;">Cores extraídas da arte do seu convite, com o código hexadecimal de cada uma.</p>
 
-                        <!-- 13. PALETA DE CORES -->
-                        <div class="preview-card-wrapper">
-                            <div class="prominent-highlight-badge">13. Paleta de Cores Recomendada</div>
-                            <p style="font-size:0.75rem; color:var(--gray-muted); margin-bottom:12px;">Amostragem dos códigos hexadecimais de cor gerados pela IA.</p>
-                            
-                            <div class="color-palette-show" style="justify-content: center;">
-                                <span class="pal-dot" style="background-color: #69D7D1;" title="#69D7D1"></span>
-                                <span class="pal-dot" style="background-color: #AEEDEA;" title="#AEEDEA"></span>
-                                <span class="pal-dot" style="background-color: #F7A8C8;" title="#F7A8C8"></span>
-                                <span class="pal-dot" style="background-color: #FBE1EC;" title="#FBE1EC"></span>
-                                <span class="pal-dot" style="background-color: #FFFFFF; border: 1px solid #ddd;" title="#FFFFFF"></span>
-                            </div>
-                        </div>
-
-                        <!-- 14. TIPOGRAFIA PRINCIPAL -->
-                        <div class="preview-card-wrapper">
-                            <div class="prominent-highlight-badge">14. Tipografia Principal</div>
-                            <p style="font-size:0.75rem; color:var(--gray-muted); margin-bottom:12px;">A fonte serifada sugerida para os textos elegantes do tema.</p>
-                            
-                            <div class="font-spec" style="font-size:1.15rem; font-family:'Playfair Display', serif; font-weight:700; text-align:center; padding: 14px; background:var(--gray-light); border-radius:10px;">
-                                Playfair Display (Aa Bb Cc Dd Ee Ff)
-                            </div>
-                        </div>
-
-                        <!-- 15. TIPOGRAFIA COMPLEMENTAR -->
-                        <div class="preview-card-wrapper">
-                            <div class="prominent-highlight-badge">15. Tipografia Complementar</div>
-                            <p style="font-size:0.75rem; color:var(--gray-muted); margin-bottom:12px;">A fonte sem serifa sugerida para leitura rápida de dados básicos.</p>
-                            
-                            <div class="font-spec" style="font-size:1.15rem; font-family:'Poppins', sans-serif; font-weight:500; text-align:center; padding: 14px; background:var(--gray-light); border-radius:10px;">
-                                Poppins (Aa Bb Cc Dd Ee Ff)
-                            </div>
+                            <div class="color-palette-show" style="justify-content: center;"></div>
+                            <div id="palette-hex-row" style="text-align:center; margin-top:6px;"></div>
                         </div>
 
                     </div>
@@ -796,8 +698,8 @@
 
                     <div class="checkout-summary-card">
                         <div class="summary-details">
-                            <h3>Kit Digital Completo (15 itens)</h3>
-                            <p class="theme-text" id="checkout-val-theme">Tema: Jardim Encantado - Helena</p>
+                            <h3 id="checkout-kit-title">Kit Digital Completo</h3>
+                            <p class="theme-text" id="checkout-val-theme"></p>
                             <span class="badge-ready">Pronto para liberar</span>
                         </div>
                         <div class="summary-price">
@@ -893,51 +795,10 @@
                         </div>
                         
                         <h2 class="unlocked-title">Kit Liberado com Sucesso!</h2>
-                        <p class="unlocked-subtitle">Seu kit completo (15 itens) em altíssima resolução foi liberado limpo de marcas d'água para download:</p>
+                        <p class="unlocked-subtitle" id="download-subtitle">Seu kit em altíssima resolução foi liberado, limpo de marcas d'água, para download:</p>
                         
-                        <div class="download-options-list">
-                            <div class="download-item-card">
-                                <div class="item-icon-area">✉️</div>
-                                <div class="item-meta">
-                                    <h4>Convites Principal e Lembrete</h4>
-                                    <p>Envio virtual (PNG) + Versão para impressão (PDF).</p>
-                                </div>
-                                <div class="download-actions">
-                                    <a href="assets/infantil_bg.jpg" download="Convite_Meraki_Helena.jpg" class="dl-btn" onclick="trackDownload('Convite')">PNG</a>
-                                    <button class="dl-btn outline" onclick="simulatePdfDownload('Convite')">PDF</button>
-                                </div>
-                            </div>
-                            <div class="download-item-card">
-                                <div class="item-icon-area">⏰</div>
-                                <div class="item-meta">
-                                    <h4>Lembrete de WhatsApp</h4>
-                                    <p>Card de contagem regressiva alinhado ao convite.</p>
-                                </div>
-                                <div class="download-actions">
-                                    <a href="assets/infantil_bg.jpg" download="Lembrete_Meraki_Helena.jpg" class="dl-btn" onclick="trackDownload('Lembrete')">PNG</a>
-                                </div>
-                            </div>
-                            <div class="download-item-card">
-                                <div class="item-icon-area">📋</div>
-                                <div class="item-meta">
-                                    <h4>Prancha de Elementos</h4>
-                                    <p>Elementos avulsos e figuras recortados.</p>
-                                </div>
-                                <div class="download-actions">
-                                    <a href="assets/elementos_sheet.jpg" download="Elementos_Meraki_Helena.jpg" class="dl-btn" onclick="trackDownload('Prancha')">PNG</a>
-                                </div>
-                            </div>
-                            <div class="download-item-card">
-                                <div class="item-icon-area">📦</div>
-                                <div class="item-meta">
-                                    <h4>Pacote Completo (ZIP)</h4>
-                                    <p>ZIP com brasão, monograma, papéis e fontes separadas.</p>
-                                </div>
-                                <div class="download-actions">
-                                    <button class="dl-btn btn-primary" onclick="simulateZipDownload()">BAIXAR ZIP</button>
-                                </div>
-                            </div>
-                        </div>
+                        <div class="download-options-list" id="download-options-list"></div>
+                        <p id="download-unavailable" style="display:none; color:var(--gray-muted); font-size:0.85rem; text-align:center; margin:12px 0;">Não foi possível localizar os arquivos do seu kit. Gere o kit novamente ou fale com o suporte.</p>
 
                         <button class="btn btn-secondary btn-block" onclick="showView('home')">
                             🏠 Voltar ao Início
@@ -1136,7 +997,7 @@
     </div> <!-- End of app-container -->
 
     <!-- C. FLOATING DEVELOPER QUICK ACTIONS -->
-    <button class="dev-fab-toggle" id="devFabToggle" onclick="toggleDevPanel()">🛠️</button>
+    <button class="dev-fab-toggle" id="devFabToggle" onclick="toggleDevPanel()" style="display:none;">🛠️</button>
     
     <div class="dev-float-control-panel" id="devFloatPanel">
         <div class="dev-float-header">
@@ -1153,8 +1014,6 @@
             <button onclick="navTo('pro-login')">7. Login Pro</button>
             <button onclick="navTo('pro-dashboard')">8. Painel Pro</button>
             <button onclick="navTo('admin')">9. Admin</button>
-            <button onclick="prefillAndGenerate('infantil')" style="grid-column: span 2; background-color: var(--teal-secondary);">🐰 Helena (Infantil)</button>
-            <button onclick="prefillAndGenerate('debutante')" style="grid-column: span 2; background-color: var(--pink-secondary);">🦋 Giovanna (15 anos)</button>
         </div>
     </div>
 
