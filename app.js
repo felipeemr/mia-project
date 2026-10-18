@@ -143,11 +143,13 @@ async function apiGenerateKit(projectData) {
 }
 
 
-function applyRealAssets(assetsUrls, projectId, identity, phrase, kit) {
+function applyRealAssets(assetsUrls, projectId, identity, phrase, kit, kitMissing, kitQuota) {
     if (!assetsUrls) return;
     appState.currentProject.assetsUrls = assetsUrls;
     appState.currentProject.identity = identity || null;
     appState.currentProject.kit = kit || null;
+    appState.currentProject.kitMissing = Array.isArray(kitMissing) ? kitMissing : [];
+    appState.currentProject.kitQuota = !!kitQuota;
     if (phrase) appState.currentProject.phrase = phrase;
     appState.currentProject.projectId  = projectId;
     // Profissionais: guarda o projeto gerado para reabrir depois pela lista de projetos
@@ -803,7 +805,7 @@ function startLoadingProgressAnimation() {
             // Aplica as imagens reais da IA ANTES de mostrar a tela: assim nunca aparece imagem de exemplo
             // antes da imagem gerada (applyRealAssets já monta a tela de resultado com os dados reais).
             if (apiResult?.assetsUrls) {
-                applyRealAssets(apiResult.assetsUrls, apiResult.projectId, apiResult.identity, apiResult.project?.phrase, apiResult.kit);
+                applyRealAssets(apiResult.assetsUrls, apiResult.projectId, apiResult.identity, apiResult.project?.phrase, apiResult.kit, apiResult.kitMissing, apiResult.kitQuota);
                 // Processa DNA da IA (Fontes e Ícones) da Fase 6
                 if (apiResult.assetsUrls._dna) applyAiDna(apiResult.assetsUrls._dna);
             }
@@ -861,6 +863,69 @@ function refreshGallery() {
     if (checkoutTitle) checkoutTitle.textContent = `Kit Digital Completo (${label})`;
 }
 
+// Nomes (como o cliente os conhece) dos itens que podem faltar no kit
+const KIT_ITEM_LABELS = { mascote: 'Mascote', elementos: 'Elementos do tema e papel digital', fundo: 'Fundo limpo', logo: 'Logotipo', lembrete: 'Lembrete', brasao: 'Brasão', lembrancinha: 'Lembrancinha' };
+
+// Mostra quais itens não saíram e oferece tentar de novo (só eles, o convite aprovado não muda)
+function renderKitMissingNotice() {
+    const box = document.getElementById('kit-missing-notice');
+    if (!box) return;
+    const p = appState.currentProject || {};
+    const missing = (p.kitMissing || []).filter(k => KIT_ITEM_LABELS[k]);
+    if (!missing.length || !p.projectId) { box.style.display = 'none'; return; }
+    const names = missing.map(k => KIT_ITEM_LABELS[k]).join(', ');
+    document.getElementById('kit-missing-title').textContent = missing.length === 1 ? 'Um item do kit não pôde ser gerado' : `${missing.length} itens do kit não puderam ser gerados`;
+    document.getElementById('kit-missing-text').textContent = (p.kitQuota
+        ? 'O serviço de criação está temporariamente indisponível. '
+        : 'Houve uma instabilidade ao criar estes itens. ')
+        + `Faltaram: ${names}. O seu convite está pronto; toque abaixo para gerar só o que faltou.`;
+    const btn = document.getElementById('kit-retry-btn');
+    btn.disabled = false; btn.textContent = '🔄 Tentar de novo os itens que faltam';
+    box.style.display = '';
+}
+
+async function retryMissingKit() {
+    const p = appState.currentProject || {};
+    const items = (p.kitMissing || []).slice();
+    if (!items.length || !p.projectId) return;
+    if (items.includes('mascote') && !selectedPhotosFiles[0]) {
+        alert('Para refazer o mascote precisamos da foto da criança de novo. Volte ao formulário (Alterar Dados), envie a foto e gere outra vez.');
+        return;
+    }
+    const btn = document.getElementById('kit-retry-btn');
+    btn.disabled = true; btn.textContent = '⏳ Gerando os itens que faltam... (pode levar alguns minutos)';
+
+    const fd = new FormData();
+    fd.append('items', JSON.stringify(items));
+    fd.append('gender', p.gender || '');
+    if (selectedPhotosFiles[0]) fd.append('photos', selectedPhotosFiles[0]);
+    try {
+        const res = await fetch(`${API_BASE}/generate/retry/${p.projectId}`, {
+            method: 'POST',
+            headers: _authToken ? { 'Authorization': `Bearer ${_authToken}` } : {},
+            body: fd,
+            signal: AbortSignal.timeout(600000),
+        });
+        const data = await res.json().catch(() => ({}));
+        if (!res.ok) throw new Error(data.error || 'Falha ao refazer os itens.');
+
+        // Junta só o que veio agora ao que já estava na tela
+        const cur = p.assetsUrls || {};
+        const novo = data.assetsUrls || {};
+        const merged = { ...cur };
+        Object.keys(novo).forEach(k => { if (novo[k]) merged[k] = novo[k]; });
+        p.assetsUrls = merged;
+        if (data.kit && (data.kit.principais.length || data.kit.complementares.length)) p.kit = data.kit;
+        p.kitMissing = data.kitMissing || [];
+        p.kitQuota = !!data.kitQuota;
+        saveStateToStorage();
+        populateResultScreen();
+    } catch (e) {
+        btn.disabled = false; btn.textContent = '🔄 Tentar de novo os itens que faltam';
+        alert('Não foi possível gerar agora: ' + e.message);
+    }
+}
+
 // 9. DYNAMIC DATA BINDINGS & RENDERING
 // Só aparece o que foi gerado para este cliente: nenhuma arte, texto ou cor de exemplo.
 function populateResultScreen() {
@@ -913,6 +978,7 @@ function populateResultScreen() {
     const checkoutTheme = document.getElementById('checkout-val-theme');
     if (checkoutTheme) checkoutTheme.textContent = p.theme ? `Tema: ${p.theme}${p.name ? ' - ' + p.name : ''}` : '';
     refreshGallery();
+    renderKitMissingNotice();
 
     // Realça a primeira aba
     document.querySelectorAll('.tab-btn').forEach(btn => btn.classList.remove('active'));

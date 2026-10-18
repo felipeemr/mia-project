@@ -68,6 +68,37 @@ async function checkGenerationLimits(userId, userType, config = {}) {
     return { allowed: true };
 }
 
+const ALL_KIT_ITEMS = ['mascote', 'elementos', 'fundo', 'logo', 'lembrete', 'brasao', 'lembrancinha'];
+
+// Guarda os itens do kit no Supabase; se falhar, devolve a imagem embutida (data URL) só para esta resposta
+async function saveKitExtras(extras, pid) {
+    const saveBuf = async (buf, name) => {
+        if (!buf) return null;
+        try { return await uploadBuffer(buf, `projects/${pid}/${name}`, 'image/png'); }
+        catch (e) {
+            console.warn(`[Generate] Falha ao salvar ${name} no storage: ${e.message}`);
+            return `data:image/png;base64,${buf.toString('base64')}`;
+        }
+    };
+    const saveList = (list, prefix) => Promise.all((list || []).map((e, i) => saveBuf(e.png, `${prefix}_${String(i + 1).padStart(2, '0')}.png`)));
+    const [mascote, elementos, fundo, papel, principais, complementares, logo, lembrete, brasao, lembrancinha] = await Promise.all([
+        saveBuf(extras.mascote, 'mascote.png'),
+        saveBuf(extras.elementosSheet, 'prancha_elementos.png'),
+        saveBuf(extras.fundo, 'fundo_limpo.png'),
+        saveBuf(extras.papel, 'papel_digital.png'),
+        saveList(extras.principais, 'elemento_principal'),
+        saveList(extras.complementares, 'elemento_complementar'),
+        saveBuf(extras.logo, 'logotipo.png'),
+        saveBuf(extras.lembrete, 'lembrete.png'),
+        saveBuf(extras.brasao, 'brasao.png'),
+        saveBuf(extras.lembrancinha, 'lembrancinha.png'),
+    ]);
+    return {
+        urls: { mascote, elementos, fundo, papel, logo, lembrete, brasao, lembrancinha },
+        kit: { principais: principais.filter(Boolean), complementares: complementares.filter(Boolean) },
+    };
+}
+
 // ---------------------------------------------------------------------------
 // POST /api/generate — Pipeline principal de geração
 // ---------------------------------------------------------------------------
@@ -246,6 +277,8 @@ router.post('/', optionalAuth, upload.fields([
     // --- 4c. Itens extras do kit (mascote, prancha, elementos, fundo, papel), coerentes com o convite ---
     // Desligue com KIT_EXTRAS=off no .env (cada geração custa ~US$ 0,27 a mais).
     let kit = null;
+    let kitMissing = [];
+    let kitQuota = false;
     const kitUrls = {};
     if (process.env.KIT_EXTRAS !== 'off' && process.env.GEMINI_API_KEY) {
         try {
@@ -260,32 +293,11 @@ router.post('/', optionalAuth, upload.fields([
                 project: { date: projectData.date, time: projectData.time, location: projectData.location },
             });
 
-            // Guarda no Supabase; se falhar, devolve a imagem embutida (data URL) só para esta resposta
-            const pid = storageId;
-            const saveBuf = async (buf, name) => {
-                if (!buf) return null;
-                try { return await uploadBuffer(buf, `projects/${pid}/${name}`, 'image/png'); }
-                catch (e) {
-                    console.warn(`[Generate] Falha ao salvar ${name} no storage: ${e.message}`);
-                    return `data:image/png;base64,${buf.toString('base64')}`;
-                }
-            };
-            const saveList = (list, prefix) => Promise.all((list || []).map((e, i) => saveBuf(e.png, `${prefix}_${String(i + 1).padStart(2, '0')}.png`)));
-
-            const [mascote, elementos, fundo, papel, principais, complementares, logo, lembrete, brasao, lembrancinha] = await Promise.all([
-                saveBuf(extras.mascote, 'mascote.png'),
-                saveBuf(extras.elementosSheet, 'prancha_elementos.png'),
-                saveBuf(extras.fundo, 'fundo_limpo.png'),
-                saveBuf(extras.papel, 'papel_digital.png'),
-                saveList(extras.principais, 'elemento_principal'),
-                saveList(extras.complementares, 'elemento_complementar'),
-                saveBuf(extras.logo, 'logotipo.png'),
-                saveBuf(extras.lembrete, 'lembrete.png'),
-                saveBuf(extras.brasao, 'brasao.png'),
-                saveBuf(extras.lembrancinha, 'lembrancinha.png'),
-            ]);
-            Object.assign(kitUrls, { mascote, elementos, fundo, papel, logo, lembrete, brasao, lembrancinha });
-            kit = { principais: principais.filter(Boolean), complementares: complementares.filter(Boolean) };
+            const saved = await saveKitExtras(extras, storageId);
+            Object.assign(kitUrls, saved.urls);
+            kit = saved.kit;
+            kitMissing = extras.missing || [];
+            kitQuota = !!extras.quota;
 
             // No banco entram só URLs de verdade (nunca imagens embutidas)
             const http = u => (u && /^https?:/.test(u)) ? u : null;
@@ -295,6 +307,7 @@ router.post('/', optionalAuth, upload.fields([
             };
         } catch (kitErr) {
             console.warn('[Generate] Aviso ao gerar itens extras do kit:', kitErr.message);
+            kitMissing = ALL_KIT_ITEMS.slice();
         }
     }
 
@@ -344,6 +357,8 @@ router.post('/', optionalAuth, upload.fields([
         },
         identity,
         kit,
+        kitMissing,
+        kitQuota,
         project: {
             ...projectData,
             id: projectId,
@@ -373,6 +388,69 @@ router.get('/status/:projectId', optionalAuth, async (req, res) => {
         });
     } catch (err) {
         res.status(500).json({ error: err.message });
+    }
+});
+
+// ---------------------------------------------------------------------------
+// POST /api/generate/retry/:projectId — Refaz só os itens do kit que não saíram
+// body (multipart): items (JSON ["mascote",...]), photos (opcional: necessária para o mascote)
+// ---------------------------------------------------------------------------
+router.post('/retry/:projectId', optionalAuth, upload.fields([{ name: 'photos', maxCount: 1 }]), async (req, res) => {
+    try {
+        const items = (() => { try { return JSON.parse(req.body.items || '[]'); } catch { return []; } })()
+            .filter(k => ALL_KIT_ITEMS.includes(k));
+        if (!items.length) return res.status(400).json({ error: 'Nenhum item informado para refazer.' });
+
+        const { data: proj, error } = await supabaseAdmin.from('projects').select('*').eq('id', req.params.projectId).single();
+        if (error || !proj) return res.status(404).json({ error: 'Projeto não encontrado.' });
+        const urls = proj.assets_urls || {};
+        if (!urls.background) return res.status(400).json({ error: 'Convite original não encontrado.' });
+
+        const axios = require('axios');
+        const fetchBuf = async (u) => Buffer.from((await axios.get(u, { responseType: 'arraybuffer', timeout: 30000 })).data);
+        const invitation = await fetchBuf(urls.background);
+        const existing = {};
+        if (items.includes('lembrancinha')) {
+            if (urls.fundo) existing.fundo = await fetchBuf(urls.fundo).catch(() => null);
+            if (urls.logo)  existing.logo  = await fetchBuf(urls.logo).catch(() => null);
+        }
+
+        console.log(`[Retry] ${proj.name}: refazendo ${items.join(', ')}`);
+        const extras = await generateKitExtras({
+            invitation,
+            childPhoto: req.files?.photos?.[0]?.buffer || null,
+            themeText: proj.theme,
+            palette: null,
+            name: proj.name,
+            age: proj.age,
+            gender: ['m', 'f'].includes(req.body.gender) ? req.body.gender : (proj.gender || 'f'),   // a coluna gender não existe no banco: vem do formulário
+            project: { date: proj.date, time: proj.time, location: proj.location },
+            only: items,
+            existing,
+        });
+
+        // Mesma pasta da geração original; o carimbo na URL evita devolver a imagem antiga pelo cache
+        const saved = await saveKitExtras(extras, req.params.projectId);
+        const http = u => (u && /^https?:/.test(u)) ? u : null;
+        const merged = { ...urls };
+        for (const k of Object.keys(saved.urls)) if (http(saved.urls[k])) merged[k] = saved.urls[k];
+        try { await supabaseAdmin.from('projects').update({ assets_urls: merged }).eq('id', req.params.projectId); } catch (_) { /* segue sem salvar */ }
+
+        const t = Date.now();
+        const bust = (u) => (u && u.startsWith('http') ? `${u}?t=${t}` : u);
+        res.json({
+            assetsUrls: {
+                mascote: bust(saved.urls.mascote), elementos: bust(saved.urls.elementos), fundo: bust(saved.urls.fundo),
+                papel: bust(saved.urls.papel), logo: bust(saved.urls.logo), lembretePreview: bust(saved.urls.lembrete),
+                brasao: bust(saved.urls.brasao), lembrancinha: bust(saved.urls.lembrancinha),
+            },
+            kit: items.includes('elementos') ? saved.kit : null,
+            kitMissing: extras.missing || [],
+            kitQuota: !!extras.quota,
+        });
+    } catch (err) {
+        console.error('[Retry] Erro:', err.message);
+        res.status(500).json({ error: 'Não foi possível refazer os itens agora.' });
     }
 });
 

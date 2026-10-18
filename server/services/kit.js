@@ -397,26 +397,34 @@ async function buildDigitalPaper(elements, palette, size = 2048) {
  * @param {string[]} [o.palette]  paleta da identidade
  * @returns {Promise<{mascote?:Buffer, elementosSheet?:Buffer, elementos:Array, ilustracoes:Array, fundo?:Buffer, papel?:Buffer, errors:Object}>}
  */
-async function generateKitExtras({ invitation, childPhoto = null, themeText = '', palette = null, name = '', age = '', gender = 'f', project = {} }) {
+async function generateKitExtras({ invitation, childPhoto = null, themeText = '', palette = null, name = '', age = '', gender = 'f', project = {}, only = null, existing = {} }) {
     const errors = {};
+    // `only`: lista de itens a (re)gerar; null = todos. `existing`: imagens já prontas (fundo, logo) usadas pela lembrancinha.
+    const want = (k) => !only || only.includes(k);
+    const skip = async () => null;
     const run = async (key, fn) => { try { return await fn(); } catch (e) { errors[key] = e.message; console.warn(`[Kit] ${key} falhou: ${e.message}`); return null; } };
 
     // Brasão usa a 1ª letra do nome
     const initial = String(name || '').trim().charAt(0);
+    const needFavor = want('lembrancinha');
+    const needBg   = want('fundo') || (needFavor && !existing.fundo);
+    const needLogo = want('logo')  || (needFavor && !existing.logo);
 
-    // 7 chamadas de IA em paralelo
-    const [mascote, sheet, fundo, logo, lembrete, brasao, thanks] = await Promise.all([
-        run('mascote',  () => generateMascot({ invitation, childPhoto })),
-        run('elementos', () => generateElementsSheet({ invitation, themeText })),
-        run('fundo',    () => generateBackground({ invitation })),
-        run('logo',     () => generateLogo({ invitation, name, age })),
-        run('lembrete', () => generateReminder({ invitation, project: { ...project, name } })),
-        run('brasao',   () => generateBadge({ invitation, kind: 'crest', letters: initial })),
-        run('agradecimento', () => generateThanks({ invitation, gender })),
+    // Até 7 chamadas de IA em paralelo
+    const [mascote, sheet, fundoNew, logoNew, lembrete, brasao, thanks] = await Promise.all([
+        want('mascote')   ? run('mascote',  () => generateMascot({ invitation, childPhoto })) : skip(),
+        want('elementos') ? run('elementos', () => generateElementsSheet({ invitation, themeText })) : skip(),
+        needBg            ? run('fundo',    () => generateBackground({ invitation })) : skip(),
+        needLogo          ? run('logo',     () => generateLogo({ invitation, name, age })) : skip(),
+        want('lembrete')  ? run('lembrete', () => generateReminder({ invitation, project: { ...project, name } })) : skip(),
+        want('brasao')    ? run('brasao',   () => generateBadge({ invitation, kind: 'crest', letters: initial })) : skip(),
+        needFavor         ? run('agradecimento', () => generateThanks({ invitation, gender })) : skip(),
     ]);
+    const fundo = fundoNew || existing.fundo || null;
+    const logo  = logoNew  || existing.logo  || null;
 
     // Lembrancinha: fundo limpo (quadrado) + logotipo + agradecimento, montados por código
-    const lembrancinha = (fundo && logo && thanks)
+    const lembrancinha = (needFavor && fundo && logo && thanks)
         ? await run('lembrancinha', () => composeFavorTag({ background: fundo, logo, thanks }))
         : null;
 
@@ -428,8 +436,12 @@ async function generateKitExtras({ invitation, childPhoto = null, themeText = ''
         complementares = elementos.slice(4);
         if (elementos.length) papel = await run('papel', () => buildDigitalPaper(elementos, palette));
     }
-    console.log(`[Kit] Concluído: mascote=${!!mascote} prancha=${!!sheet} elementos=${elementos.length} fundo=${!!fundo} papel=${!!papel}`);
-    return { mascote, elementosSheet: sheet, elementos, principais, complementares, fundo, papel, logo, lembrete, brasao, lembrancinha, errors };
+    // Itens pedidos que não saíram (a tela avisa e oferece "tentar de novo")
+    const got = { mascote, elementos: sheet && elementos.length ? sheet : null, fundo: fundoNew, logo: logoNew, lembrete, brasao, lembrancinha };
+    const missing = ['mascote', 'elementos', 'fundo', 'logo', 'lembrete', 'brasao', 'lembrancinha'].filter(k => want(k) && !got[k]);
+    const quota = Object.values(errors).some(m => /cota|cr[eé]dito|quota|429/i.test(String(m)));
+    console.log(`[Kit] Concluído: mascote=${!!mascote} prancha=${!!sheet} elementos=${elementos.length} fundo=${!!fundo} papel=${!!papel}${missing.length ? ' | FALTARAM: ' + missing.join(', ') : ''}`);
+    return { mascote, elementosSheet: sheet, elementos, principais, complementares, fundo, papel, logo, lembrete, brasao, lembrancinha, errors, missing, quota };
 }
 
 module.exports = { generateKitExtras, generateThanks, composeFavorTag, generateLogo, generateBadge, generateReminder, generateMascot, generateElementsSheet, generateBackground, sliceElements, buildDigitalPaper, bufferToDataUrl };

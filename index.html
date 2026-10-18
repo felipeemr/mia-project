@@ -467,6 +467,16 @@
                         </div>
                     </div>
 
+                    <!-- Aviso quando algum item do kit não foi gerado -->
+                    <div class="watermark-notice-banner" id="kit-missing-notice" style="display:none; background:#fff6e5; border-color:#f0c36d;">
+                        <span class="notice-icon">⚠️</span>
+                        <div class="notice-text">
+                            <h4 id="kit-missing-title">Alguns itens do kit não puderam ser gerados</h4>
+                            <p id="kit-missing-text"></p>
+                            <button class="btn btn-secondary" id="kit-retry-btn" style="margin-top:8px;" onclick="retryMissingKit()">🔄 Tentar de novo os itens que faltam</button>
+                        </div>
+                    </div>
+
                     <!-- Result Navigation Tabs (Act as Smooth Anchors now) -->
                     <div class="result-tabs" style="position: sticky; top: 0; z-index: 80; box-shadow: 0 4px 12px rgba(0,0,0,0.02);">
                         <button class="tab-btn active" id="btn-tab-convites" onclick="switchResultTab(event, 'section-destaques')">1. Destaques</button>
