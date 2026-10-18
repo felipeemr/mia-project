@@ -26,7 +26,56 @@ const BUDGET_MS = 150000;
 // ---------------------------------------------------------------------------
 // Chamadas de IA
 // ---------------------------------------------------------------------------
-async function aiImage({ label, prompt, photoBuffer = null, refBuffers = [], models, aspectRatio }) {
+// Provedor do kit: segue o do convite. Contexto por geração (várias gerações podem rodar ao mesmo tempo).
+const { AsyncLocalStorage } = require('async_hooks');
+const kitCtx = new AsyncLocalStorage();
+
+const OPENAI_KIT_MODELS = () => [...new Set([process.env.OPENAI_EDIT_MODEL, process.env.OPENAI_POSTER_MODEL || 'chatgpt-image-latest', 'gpt-image-1'].filter(Boolean))];
+
+/** Mesma chamada de imagem, pela OpenAI (edição com foto/convite como referência). */
+async function openaiImage({ prompt, photoBuffer = null, refBuffers = [], aspectRatio = '1:1' }) {
+    const OpenAI = require('openai');
+    const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
+    const [w, h] = String(aspectRatio).split(':').map(Number);
+    const r = (w && h) ? w / h : 1;
+    const size = r > 1.2 ? '1536x1024' : r < 0.83 ? '1024x1536' : '1024x1024';
+    const inputs = [photoBuffer, ...refBuffers].filter(Boolean);
+    const files = await Promise.all(inputs.map(async (buf, i) => OpenAI.toFile(
+        await sharp(buf).rotate().resize(1024, 1024, { fit: 'inside' }).jpeg({ quality: 90 }).toBuffer(), 'entrada' + (i + 1) + '.jpg', { type: 'image/jpeg' })));
+    let lastErr = null;
+    for (const model of OPENAI_KIT_MODELS()) {
+        try {
+            const quality = process.env.OPENAI_KIT_QUALITY || 'medium';
+            let res;
+            if (files.length) {
+                const params = { model, image: files, prompt, size, quality, input_fidelity: 'high' };
+                try { res = await openai.images.edit(params); }
+                catch (e) {
+                    if (e.status === 400 && /input_fidelity|unknown|unsupported|unrecognized/i.test(e.message || '')) { delete params.input_fidelity; res = await openai.images.edit(params); }
+                    else throw e;
+                }
+            } else {
+                res = await openai.images.generate({ model, prompt, n: 1, size, quality });
+            }
+            const it = res.data[0];
+            const b64 = it.b64_json || it.b64;
+            if (b64) return Buffer.from(b64, 'base64');
+            if (it.url) return Buffer.from((await require('axios').get(it.url, { responseType: 'arraybuffer', timeout: 30000 })).data);
+        } catch (e) {
+            lastErr = e;
+            const modelProblem = e.status === 404 || (e.status === 400 && /model|not supported|does not support/i.test(e.message || '') && !/safety|moderation/i.test(e.message || ''));
+            console.warn('[Kit/OpenAI] "' + model + '" falhou: ' + e.message);
+            if (!modelProblem) break;
+        }
+    }
+    const err = new Error('OpenAI: ' + (lastErr?.message || 'sem resposta'));
+    err.status = lastErr?.status;
+    if (/safety|moderation|content_policy/i.test(lastErr?.message || '') || lastErr?.code === 'moderation_blocked') err.kind = 'safety';
+    else if (lastErr?.status === 429 || /quota|billing|credit/i.test(lastErr?.message || '')) err.kind = 'quota';
+    throw err;
+}
+
+async function geminiImage({ label, prompt, photoBuffer, refBuffers, models, aspectRatio }) {
     const t0 = Date.now();
     let r;
     try {
@@ -34,12 +83,44 @@ async function aiImage({ label, prompt, photoBuffer = null, refBuffers = [], mod
     } catch (e) {
         if (e.kind !== 'overloaded') throw e;
         // Google sobrecarregado em todos os modelos: espera um pouco e faz uma segunda rodada
-        console.warn(`[Kit] ${label}: Google sobrecarregado; nova rodada em 10s...`);
+        console.warn('[Kit] ' + label + ': Google sobrecarregado; nova rodada em 10s...');
         await new Promise(res => setTimeout(res, 10000));
         r = await generateWithGemini({ prompt, photoBuffer, refBuffers, models, aspectRatio, deadlineAt: Date.now() + BUDGET_MS });
     }
-    console.log(`[Kit] ✅ ${label} (${r.model}) em ${((Date.now() - t0) / 1000).toFixed(1)}s`);
+    console.log('[Kit] ✅ ' + label + ' (' + r.model + ') em ' + ((Date.now() - t0) / 1000).toFixed(1) + 's');
     return dataUrlToBuffer(r.dataUrl);
+}
+
+/**
+ * Gera uma imagem do kit seguindo o provedor do convite (ctx.provider).
+ * Gemini com problema (cota, chave, sobrecarga, modelo) => OpenAI; OpenAI com problema => Gemini.
+ * Recusa de segurança não troca de provedor (o chamador decide o que fazer).
+ */
+async function aiImage({ label, prompt, photoBuffer = null, refBuffers = [], models, aspectRatio }) {
+    const ctx = kitCtx.getStore() || { provider: 'gemini' };
+    const hasGemini = !!process.env.GEMINI_API_KEY, hasOpenAI = !!process.env.OPENAI_API_KEY;
+    let order = ctx.provider === 'openai' ? ['openai', 'gemini'] : ['gemini', 'openai'];
+    order = order.filter(p => (p === 'gemini' ? hasGemini : hasOpenAI));
+    // Gemini já falhou por cota/chave nesta geração: não perde tempo tentando de novo
+    if (ctx.geminiDown && order.length > 1) order = order.filter(p => p !== 'gemini');
+    if (!order.length) throw Object.assign(new Error('Nenhuma API de IA configurada.'), { kind: 'config' });
+
+    let lastErr = null;
+    for (const prov of order) {
+        try {
+            if (prov === 'gemini') return await geminiImage({ label, prompt, photoBuffer, refBuffers, models, aspectRatio });
+            const t0 = Date.now();
+            const buf = await openaiImage({ prompt, photoBuffer, refBuffers, aspectRatio });
+            console.log('[Kit] ✅ ' + label + ' (OpenAI) em ' + ((Date.now() - t0) / 1000).toFixed(1) + 's');
+            return buf;
+        } catch (e) {
+            lastErr = e;
+            if (e.kind === 'safety') throw e;
+            if (prov === 'gemini' && (e.kind === 'quota' || e.kind === 'config')) ctx.geminiDown = true;
+            if (prov !== order[order.length - 1]) console.warn('[Kit] ' + label + ': ' + prov + ' indisponível (' + (e.kind || 'erro') + '); usando o outro provedor.');
+        }
+    }
+    throw lastErr;
 }
 
 /** Mascote: a mesma personagem do convite, corpo inteiro, fundo branco liso */
@@ -397,7 +478,12 @@ async function buildDigitalPaper(elements, palette, size = 2048) {
  * @param {string[]} [o.palette]  paleta da identidade
  * @returns {Promise<{mascote?:Buffer, elementosSheet?:Buffer, elementos:Array, ilustracoes:Array, fundo?:Buffer, papel?:Buffer, errors:Object}>}
  */
-async function generateKitExtras({ invitation, childPhoto = null, themeText = '', palette = null, name = '', age = '', gender = 'f', project = {}, only = null, existing = {} }) {
+async function generateKitExtras({ invitation, childPhoto = null, themeText = '', palette = null, name = '', age = '', gender = 'f', project = {}, only = null, existing = {}, provider = null }) {
+    return kitCtx.run({ provider: provider === 'openai' ? 'openai' : 'gemini', geminiDown: false },
+        () => generateKitExtrasInner({ invitation, childPhoto, themeText, palette, name, age, gender, project, only, existing }));
+}
+
+async function generateKitExtrasInner({ invitation, childPhoto = null, themeText = '', palette = null, name = '', age = '', gender = 'f', project = {}, only = null, existing = {} }) {
     const errors = {};
     // `only`: lista de itens a (re)gerar; null = todos. `existing`: imagens já prontas (fundo, logo) usadas pela lembrancinha.
     const want = (k) => !only || only.includes(k);

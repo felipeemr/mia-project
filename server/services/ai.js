@@ -456,6 +456,7 @@ async function generateKitImages(projectData, childPhotos = [], inspirationRefs 
     // --- PÔSTER ÚNICO: arte + todos os textos em pt-BR, com verificação por OCR ---
     console.log(`[AI/GPT-Image] Gerando 1/5: Convite Pôster Integrado...`);
     let backgroundUrl = null;
+    let posterProviderUsed = null;
 
     const defaultKid = projectData.age ? `a ${projectData.age}-year-old stylized character` : 'a cute stylized kid';
     const textLines = buildTextLines(projectData);
@@ -506,6 +507,7 @@ LAYOUT: the child's name in massive themed lettering at the top/upper-middle; th
     let editUnavailable = false; // true se a conta não tem acesso ao modelo de edição (403)
     let geminiDown = false;      // true se o Gemini ficou sem cota/chave: usa só a reserva (OpenAI)
     const geminiPrimary = posterProvider() === 'gemini' && !!process.env.GEMINI_API_KEY;
+    let lastProvider = 'openai'; // quem gerou a última arte (os itens do kit seguem o mesmo provedor)
     let sendRefs = true;         // false depois de uma recusa: mantém a foto da criança, tira as referências
     const generatePoster = async (themeLabel, useChild = true) => {
         const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
@@ -525,6 +527,7 @@ LAYOUT: the child's name in massive themed lettering at the top/upper-middle; th
                     models: geminiModels(),
                     deadlineAt: Date.now() + GEMINI_BUDGET_MS,
                 });
+                lastProvider = 'gemini';
                 return g.dataUrl;
             } catch (e) {
                 if (e.kind === 'safety') {
@@ -536,6 +539,8 @@ LAYOUT: the child's name in massive themed lettering at the top/upper-middle; th
                 console.warn(`[AI/Gemini] Indisponível (${e.kind || 'erro'}): ${e.message}. Usando a OpenAI como reserva.`);
             }
         }
+
+        lastProvider = 'openai';
 
         // MODO FOTO: envia a foto real da criança (+ referências) ao modelo de imagem,
         // em vez de uma descrição em texto — é isso que dá semelhança fiel no rosto.
@@ -600,7 +605,7 @@ ${prompt}`);
 
     // Até 3 tentativas: gera -> lê o texto da imagem -> confere. Guarda a melhor.
     const MAX_ATTEMPTS = 5;
-    let best = { url: null, score: -1 };
+    let best = { url: null, score: -1, provider: null };
     // Escada: fiel -> original inspirado -> genérico (só avança se o filtro recusar)
     const genericTheme = `${projectData.type === 'infantil' ? 'children' : 'elegant'} party with original decorative elements`;
     let themeForPoster = activeThemeLabel;
@@ -653,7 +658,7 @@ ${prompt}`);
         if (!url) continue;
         const check = await verifyPosterText(url, textLines);
         console.log(`[AI/Verify] Tentativa ${attempt}: ${check.passed}/${check.total} textos corretos`, check.missing.length ? `— faltando/errado: ${check.missing.join(' | ')}` : '');
-        if (check.passed > best.score) best = { url, score: check.passed };
+        if (check.passed > best.score) best = { url, score: check.passed, provider: lastProvider };
         if (check.ok) break;
         generated++;
         if (generated >= 2) {
@@ -665,6 +670,7 @@ ${prompt}`);
         throw new Error('Não foi possível gerar o convite (a IA recusou ou falhou em todas as tentativas).');
     }
     backgroundUrl = best.url;
+    posterProviderUsed = best.provider;
     console.log(`[AI/GPT-Image] ✅ Pôster gerado. Textos corretos: ${best.score}`);
 
     /* -- COMENTADO TEMPORARIAMENTE A PEDIDO DO USUÁRIO PARA ECONOMIZAR TEMPO E FOCO NO PÔSTER --
@@ -751,6 +757,7 @@ ${prompt}`);
         elementos: null, // elementosUrl temporariamente desativado
         fundo: null, // fundoUrl temporariamente desativado
         papel: null, // papelUrl temporariamente desativado
+        _provider: posterProviderUsed, // 'gemini' | 'openai': os itens do kit seguem o mesmo provedor do convite
         _dna: inspirationDna, // DNA usado pelo frontend para fontes e ícones dinâmicos
     };
 }

@@ -184,6 +184,7 @@ router.post('/', optionalAuth, upload.fields([
     let bgBuffer    = null;
     let assetsUrls  = {};
     let aiDna       = null;
+    let kitProvider = null; // provedor que gerou o convite: o kit segue o mesmo
     const bgDefault = DEFAULT_BG[projectData.type];
 
     try {
@@ -193,10 +194,12 @@ router.post('/', optionalAuth, upload.fields([
             console.log('[Generate] Chamando API de IA para geração das imagens...');
             const aiImages = await generateKitImages(projectData, childPhotos, inspirationRefs);
             aiDna = aiImages._dna || null;
+            kitProvider = aiImages._provider || null;
+            assetsUrls.kit_provider = kitProvider;
 
             // Salva cada imagem no Supabase Storage com URL permanente
             const savePromises = Object.entries(aiImages).map(async ([key, url]) => {
-                if (!url || key === '_dna') return; // Ignora _dna, pois não é uma URL de imagem
+                if (!url || key === '_dna' || key === '_provider') return; // Ignora _dna, pois não é uma URL de imagem
                 try {
                     const savedUrl = await uploadFromUrl(url, `projects/${storageId}/${key}.png`);
                     assetsUrls[key] = savedUrl;
@@ -280,12 +283,13 @@ router.post('/', optionalAuth, upload.fields([
     let kitMissing = [];
     let kitQuota = false;
     const kitUrls = {};
-    if (process.env.KIT_EXTRAS !== 'off' && process.env.GEMINI_API_KEY) {
+    if (process.env.KIT_EXTRAS !== 'off' && (process.env.GEMINI_API_KEY || process.env.OPENAI_API_KEY)) {
         try {
             const extras = await generateKitExtras({
                 invitation: bgBuffer,
                 childPhoto: childPhotos[0]?.buffer || null,
                 themeText: projectData.theme,
+                provider: kitProvider,
                 palette: identity?.palette || null,
                 name: projectData.name,
                 age: projectData.age,
@@ -427,6 +431,7 @@ router.post('/retry/:projectId', optionalAuth, upload.fields([{ name: 'photos', 
             project: { date: proj.date, time: proj.time, location: proj.location },
             only: items,
             existing,
+            provider: urls.kit_provider || null,
         });
 
         // Mesma pasta da geração original; o carimbo na URL evita devolver a imagem antiga pelo cache
