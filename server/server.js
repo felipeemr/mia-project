@@ -13,6 +13,7 @@ const authRoutes      = require('./routes/auth');
 const projectsRoutes  = require('./routes/projects');
 const generateRoutes  = require('./routes/generate');
 const downloadsRoutes = require('./routes/downloads');
+const paymentsRoutes  = require('./routes/payments');
 
 const app  = express();
 const PORT = process.env.PORT || 3001;
@@ -67,6 +68,7 @@ app.use('/api/auth',      authRoutes);
 app.use('/api/projects',  projectsRoutes);
 app.use('/api/generate',  generateRoutes);
 app.use('/api/downloads', downloadsRoutes);
+app.use('/api/payments',  paymentsRoutes);
 
 // ---------------------------------------------------------------------------
 // Fallback: retorna o index.html para navegação SPA

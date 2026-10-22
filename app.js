@@ -120,6 +120,7 @@ async function apiGenerateKit(projectData) {
     });
 
     // Anexa fotos e referências reais selecionadas pelo usuário
+    formData.append('email', projectData.email || '');
     selectedPhotosFiles.forEach(file => formData.append('photos', file));
     selectedRefFiles.forEach(file => formData.append('references', file));
 
@@ -143,26 +144,6 @@ async function apiGenerateKit(projectData) {
 }
 
 
-function applyRealAssets(assetsUrls, projectId, identity, phrase, kit, kitMissing, kitQuota) {
-    if (!assetsUrls) return;
-    appState.currentProject.assetsUrls = assetsUrls;
-    appState.currentProject.identity = identity || null;
-    appState.currentProject.kit = kit || null;
-    appState.currentProject.kitMissing = Array.isArray(kitMissing) ? kitMissing : [];
-    appState.currentProject.kitQuota = !!kitQuota;
-    if (phrase) appState.currentProject.phrase = phrase;
-    appState.currentProject.projectId  = projectId;
-    // Profissionais: guarda o projeto gerado para reabrir depois pela lista de projetos
-    const entry = appState.projectsDb.find(x => x.id === appState.currentProject.id);
-    if (entry) {
-        const { photos, references, ...rest } = appState.currentProject;
-        entry.snapshot = { ...rest, dateObj: rest.dateObj ? new Date(rest.dateObj).toISOString() : null };
-    }
-    saveStateToStorage();
-
-    populateResultScreen();
-    console.log('[API] ✅ Assets reais aplicados na interface.');
-}
 
 
 /* ========================================================================== */
@@ -177,7 +158,7 @@ let appState = {
         bypassPayment: false,
         infiniteLimit: false
     },
-    
+
     currentUser: {
         type: 'client', // 'client' or 'pro'
         name: 'Cliente',
@@ -194,22 +175,23 @@ let appState = {
 // 2. APP INITIALIZATION
 document.addEventListener('DOMContentLoaded', () => {
     loadStateFromStorage();
-    
-    // DEVELOPER PRESETS: Automatically bypass payment and allow infinite generations for review
-    appState.config.infiniteLimit = true;
-    appState.config.bypassPayment = true;
-    appState.config.freeLimits = 9999;
-    appState.currentUser.clientGenerationsCount = 0;
-    
+
+    // Pagamento e limites são controlados SÓ pelo servidor (o navegador não libera nada)
+    appState.config.infiniteLimit = false;
+    appState.config.bypassPayment = false;
+
     updateAdminInputFields();
     updateUIFromState();
-    
+
     // Setup initial view
     showView('home');
-    
+
     // Hook up form step toggles
     toggleFormFields();
-    
+
+    // Voltando do pagamento (ou retomando um projeto): ?pago=<id>
+    resumeFromUrl();
+
     // Painel de testes só aparece com ?dev=1 na URL
     if (new URLSearchParams(location.search).get('dev') === '1') {
         const fab = document.getElementById('devFabToggle');
@@ -255,17 +237,17 @@ function goHomeFresh() {
 function showView(viewId) {
     const views = document.querySelectorAll('.view-page-item');
     views.forEach(v => v.classList.remove('active'));
-    
+
     if (viewId === 'download') renderDownloads();
     const targetView = document.getElementById(`view-${viewId}`);
     if (targetView) {
         targetView.classList.add('active');
         targetView.scrollIntoView({ behavior: 'smooth' });
     }
-    
+
     // Update active nav items in desktop header
     document.querySelectorAll('.header-nav-menu a').forEach(a => a.classList.remove('active'));
-    
+
     const activeLink = Array.from(document.querySelectorAll('.header-nav-menu a')).find(a => {
         return a.getAttribute('onclick')?.includes(viewId);
     });
@@ -279,7 +261,7 @@ function navTo(viewId) {
 // Header Navigation Click (Desktop)
 function handleMenuClick(event, viewId) {
     if (event) event.preventDefault();
-    
+
     // Scroll to "Como funciona" directly if we are on landing home page
     if (viewId === 'how-it-works') {
         showView('home');
@@ -469,7 +451,8 @@ function applyIdentity(identity) {
 // Itens do kit gerados a partir do convite: elementos recortados, ilustrações e papel digital
 // ---------------------------------------------------------------------------
 function applyKitExtras(kit, assetsUrls) {
-    const tile = (src, maxH) => `<div class="brand-item-box watermarked" style="padding:10px;"><img src="${src}" alt="Elemento do tema" style="width:100%; max-height:${maxH}px; object-fit:contain; position:relative; z-index:1;"><div class="watermark-pattern-layer"><span>PRÉVIA</span></div></div>`;
+    const paid = !!(appState.currentProject && appState.currentProject.unlocked);
+    const tile = (src, maxH) => `<div class="brand-item-box${paid ? '' : ' watermarked'}" style="padding:10px;"><img src="${src}" alt="Elemento do tema" style="width:100%; max-height:${maxH}px; object-fit:contain; position:relative; z-index:1;">${paid ? '' : '<div class="watermark-pattern-layer"><span>PRÉVIA</span></div>'}</div>`;
 
     if (kit) {
         const fill = (id, list, maxH, cols) => {
@@ -575,10 +558,10 @@ function nextStep(stepNum) {
             return;
         }
     }
-    
+
     document.querySelectorAll('.form-step').forEach(step => step.style.display = 'none');
     document.getElementById(`form-step-${stepNum}`).style.display = 'block';
-    
+
     document.querySelectorAll('.step-circle').forEach((dot, index) => {
         if (index < stepNum) {
             dot.classList.add('active');
@@ -586,14 +569,14 @@ function nextStep(stepNum) {
             dot.classList.remove('active');
         }
     });
-    
+
     currentFormStep = stepNum;
 }
 
 function prevStep(stepNum) {
     document.querySelectorAll('.form-step').forEach(step => step.style.display = 'none');
     document.getElementById(`form-step-${stepNum}`).style.display = 'block';
-    
+
     document.querySelectorAll('.step-circle').forEach((dot, index) => {
         if (index < stepNum) {
             dot.classList.add('active');
@@ -618,7 +601,7 @@ function toggleFormFields() {
             if (girl) girl.checked = true;
         }
     }
-    
+
     if (partyType === 'infantil') {
         labelName.textContent = "Nome da criança";
         groupAge.style.display = 'block';
@@ -651,7 +634,7 @@ function selectPartyType(type) {
 // 8. SIMULATOR GENERATION RUNNER
 function handleGeneratorSubmit(event) {
     if (event) event.preventDefault();
-    
+
     const partyType = document.querySelector('input[name="partyType"]:checked').value;
     const name = document.getElementById('partyName').value;
     const age = document.getElementById('partyAge').value;
@@ -661,6 +644,7 @@ function handleGeneratorSubmit(event) {
     const location = document.getElementById('partyLocation').value;
     const theme = document.getElementById('partyTheme').value;
     const notes = document.getElementById('partyNotes').value;
+    const email = (document.getElementById('partyEmail').value || '').trim();
 
     // Tudo é obrigatório (a foto também); nada é preenchido por conta própria
     const faltando = [];
@@ -672,6 +656,7 @@ function handleGeneratorSubmit(event) {
     if (!time) faltando.push('horário');
     if (!location.trim()) faltando.push('local');
     if (!selectedPhotosFiles.length) faltando.push('foto da criança');
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(email)) faltando.push('um e-mail válido');
     if (faltando.length) {
         alert('Por favor, preencha: ' + faltando.join(', ') + '.');
         return;
@@ -680,16 +665,7 @@ function handleGeneratorSubmit(event) {
     const dateParts = dateStr.split('-');
     const formattedDate = `${dateParts[2]}/${dateParts[1]}/${dateParts[0]}`;
     const dateObj = new Date(dateParts[0], dateParts[1] - 1, dateParts[2]);
-    
-    // Check Client Limits
-    if (appState.currentUser.type === 'client' && !appState.config.infiniteLimit) {
-        if (appState.currentUser.clientGenerationsCount >= appState.config.freeLimits) {
-            alert(`Você atingiu seu limite de ${appState.config.freeLimits} gerações grátis. Para criar mais identidades, assine o plano profissional.`);
-            showView('pro-sales');
-            return;
-        }
-    }
-    
+
     // Check Pro Limits
     if (appState.currentUser.type === 'pro') {
         if (appState.currentUser.proDailyCount >= appState.config.proDailyLimit) {
@@ -711,17 +687,16 @@ function handleGeneratorSubmit(event) {
         phrase: '', // o servidor sorteia a frase do convite
         theme: theme,
         notes: notes,
-        watermarked: appState.currentUser.type === 'client' && !appState.config.bypassPayment,
+        email: email,
+        watermarked: true,
         initialLetter: name.charAt(0).toUpperCase(),
         dateObj: dateObj
     };
-    
-    if (appState.currentUser.type === 'client') {
-        appState.currentUser.clientGenerationsCount++;
-    } else {
+
+    if (appState.currentUser.type !== 'client') {
         appState.currentUser.proDailyCount++;
         appState.currentUser.proMonthlyCount++;
-        
+
         appState.projectsDb.unshift({
             id: appState.currentProject.id,
             name: appState.currentProject.name,
@@ -731,10 +706,10 @@ function handleGeneratorSubmit(event) {
             date: formattedDate
         });
     }
-    
+
     saveStateToStorage();
     updateUIFromState();
-    
+
     showView('generating');
     startLoadingProgressAnimation();
 }
@@ -743,10 +718,10 @@ function startLoadingProgressAnimation() {
     const progressBar = document.getElementById('generator-progress-bar');
     const statusText = document.getElementById('generating-status-text');
     const tips = document.querySelectorAll('.gen-tip-item');
-    
+
     let progress = 0;
     progressBar.style.width = '0%';
-    
+
     const statuses = [
         "Mia está selecionando as paletas aquareladas...",
         "Conectando com a API de geração de imagens...",
@@ -756,7 +731,7 @@ function startLoadingProgressAnimation() {
         "Ajustando a prancha de elementos separados...",
         "Finalizando a prévia em alta definição...",
     ];
-    
+
     let statusIdx = 0;
     let tipIdx = 0;
     let apiResult = null;
@@ -791,28 +766,27 @@ function startLoadingProgressAnimation() {
 
         progress += (progress < 80 ? 2 : 4);
         progressBar.style.width = `${Math.min(progress, 100)}%`;
-        
+
         if (progress % 15 === 0 && statusIdx < statuses.length - 1) {
             statusIdx++;
             statusText.textContent = statuses[statusIdx];
         }
-        
+
         if (progress >= 100) {
             clearInterval(interval);
             clearInterval(tipInterval);
-            
+
             if (apiError) {
                 alert(`⚠️ Ocorreu um problema na geração:\n\n${apiError}`);
                 showView('generator'); // Volta para o formulário
                 return;
             }
-            
+
             // Aplica as imagens reais da IA ANTES de mostrar a tela: assim nunca aparece imagem de exemplo
             // antes da imagem gerada (applyRealAssets já monta a tela de resultado com os dados reais).
             if (apiResult?.assetsUrls) {
-                applyRealAssets(apiResult.assetsUrls, apiResult.projectId, apiResult.identity, apiResult.project?.phrase, apiResult.kit, apiResult.kitMissing, apiResult.kitQuota);
-                // Processa DNA da IA (Fontes e Ícones) da Fase 6
-                if (apiResult.assetsUrls._dna) applyAiDna(apiResult.assetsUrls._dna);
+                applyProjectView(apiResult);
+                if (apiResult.reminderMissing) alert('O convite ficou pronto, mas o lembrete não pôde ser criado agora. Você pode gerar outra opção ou seguir com o convite.');
             }
             showView('result');
         }
@@ -862,8 +836,6 @@ function refreshGallery() {
 
     appState.kitItemCount = n;
     const label = `${n} ${n === 1 ? 'item' : 'itens'}`;
-    const notice = document.querySelector('#watermark-notice h4');
-    if (notice) notice.textContent = `Esta é uma prévia completa do seu kit (${label} com marca d'água)`;
     const checkoutTitle = document.getElementById('checkout-kit-title');
     if (checkoutTitle) checkoutTitle.textContent = `Kit Digital Completo (${label})`;
 }
@@ -889,46 +861,11 @@ function renderKitMissingNotice() {
     box.style.display = '';
 }
 
-async function retryMissingKit() {
+function retryMissingKit() {
     const p = appState.currentProject || {};
     const items = (p.kitMissing || []).slice();
     if (!items.length || !p.projectId) return;
-    if (items.includes('mascote') && !selectedPhotosFiles[0]) {
-        alert('Para refazer o mascote precisamos da foto da criança de novo. Volte ao formulário (Alterar Dados), envie a foto e gere outra vez.');
-        return;
-    }
-    const btn = document.getElementById('kit-retry-btn');
-    btn.disabled = true; btn.textContent = '⏳ Gerando os itens que faltam... (pode levar alguns minutos)';
-
-    const fd = new FormData();
-    fd.append('items', JSON.stringify(items));
-    fd.append('gender', p.gender || '');
-    if (selectedPhotosFiles[0]) fd.append('photos', selectedPhotosFiles[0]);
-    try {
-        const res = await fetch(`${API_BASE}/generate/retry/${p.projectId}`, {
-            method: 'POST',
-            headers: _authToken ? { 'Authorization': `Bearer ${_authToken}` } : {},
-            body: fd,
-            signal: AbortSignal.timeout(600000),
-        });
-        const data = await res.json().catch(() => ({}));
-        if (!res.ok) throw new Error(data.error || 'Falha ao refazer os itens.');
-
-        // Junta só o que veio agora ao que já estava na tela
-        const cur = p.assetsUrls || {};
-        const novo = data.assetsUrls || {};
-        const merged = { ...cur };
-        Object.keys(novo).forEach(k => { if (novo[k]) merged[k] = novo[k]; });
-        p.assetsUrls = merged;
-        if (data.kit && (data.kit.principais.length || data.kit.complementares.length)) p.kit = data.kit;
-        p.kitMissing = data.kitMissing || [];
-        p.kitQuota = !!data.kitQuota;
-        saveStateToStorage();
-        populateResultScreen();
-    } catch (e) {
-        btn.disabled = false; btn.textContent = '🔄 Tentar de novo os itens que faltam';
-        alert('Não foi possível gerar agora: ' + e.message);
-    }
+    startKitGeneration(items);
 }
 
 // 9. DYNAMIC DATA BINDINGS & RENDERING
@@ -980,6 +917,7 @@ function populateResultScreen() {
     applyKitExtras(p.kit, a);
 
     updateWatermarkVisibility();
+    renderResultState();
     const checkoutTheme = document.getElementById('checkout-val-theme');
     if (checkoutTheme) checkoutTheme.textContent = p.theme ? `Tema: ${p.theme}${p.name ? ' - ' + p.name : ''}` : '';
     refreshGallery();
@@ -993,12 +931,12 @@ function populateResultScreen() {
 
 function switchResultTab(event, sectionId) {
     if (event) event.preventDefault();
-    
+
     const section = document.getElementById(sectionId);
     if (section) {
         section.scrollIntoView({ behavior: 'smooth', block: 'start' });
     }
-    
+
     document.querySelectorAll('.tab-btn').forEach(btn => btn.classList.remove('active'));
     if (event) {
         event.target.classList.add('active');
@@ -1007,15 +945,13 @@ function switchResultTab(event, sectionId) {
 
 // 10. REGENERATION LOGIC
 function handleRegenerationClick() {
-    if (appState.currentUser.type === 'client' && !appState.config.infiniteLimit) {
-        if (appState.currentUser.clientGenerationsCount >= appState.config.freeLimits) {
-            alert(`Você já utilizou todas as suas tentativas gratuitas (${appState.config.freeLimits} de ${appState.config.freeLimits}). Por favor, compre este kit para finalizar ou assine o plano profissional.`);
-            showView('checkout');
-            return;
-        }
+    const att = (appState.currentProject || {}).attempts;
+    if (att && att.left <= 0) {
+        alert(`Você já usou suas ${att.allowed} prévias grátis. Escolha a que mais gostou e libere o kit completo.`);
+        goToCheckout();
+        return;
     }
-    
-    alert("Redirecionando para ajustar os dados! Você pode alterar o tema, as referências ou as observações para gerar outra variação.");
+    alert("Vamos ajustar os dados! Você pode mudar o tema, a foto ou as observações para gerar outra variação.");
     showView('generator');
     nextStep(3);
 }
@@ -1035,7 +971,7 @@ function updateWatermarkVisibility() {
         'bg-custom-container',
         'lembrancinha-container'
     ];
-    
+
     containers.forEach(id => {
         const elem = document.getElementById(id);
         if (elem) {
@@ -1055,34 +991,273 @@ function updateWatermarkVisibility() {
     }
 }
 
-// 11. CHECKOUT & PAYMENT METHOD LOGIC
-function switchPaymentMethod(method) {
-    document.querySelectorAll('.payment-method-content').forEach(mc => mc.style.display = 'none');
-    document.querySelectorAll('.pay-tab-btn').forEach(btn => btn.classList.remove('active'));
-    
-    if (method === 'pix') {
-        document.getElementById('pay-method-pix').style.display = 'block';
-        document.getElementById('btn-pay-pix').classList.add('active');
-    } else {
-        document.getElementById('pay-method-cc').style.display = 'block';
-        document.getElementById('btn-pay-cc').classList.add('active');
+// 11. PROJETO, PAGAMENTO (Mercado Pago) E GERAÇÃO DO KIT
+// O navegador só mostra o que o servidor devolve: prévia marcada até o pagamento, kit completo depois.
+const authHeaders = () => (typeof _authToken !== 'undefined' && _authToken ? { 'Authorization': `Bearer ${_authToken}` } : {});
+let payPollTimer = null;
+let kitPollTimer = null;
+let busyTimer = null;
+
+// Aplica o que o servidor devolveu (prévia, pago, kit) ao projeto atual e redesenha a tela de resultado
+function applyProjectView(v) {
+    if (!appState.currentProject) appState.currentProject = {};
+    const p = appState.currentProject;
+    if (v.project) {
+        p.name = v.project.name; p.type = v.project.type; p.age = v.project.age; p.theme = v.project.theme;
+        p.date = v.project.date; p.time = v.project.time; p.location = v.project.location;
+        p.phrase = v.project.phrase || p.phrase; p.gender = v.project.gender || p.gender;
+    }
+    p.projectId = v.projectId;
+    // Endereços relativos do servidor (arte limpa de quem já pagou) ganham o endereço completo da API
+    const abs = (u) => (typeof u === 'string' && u.startsWith('/api/')) ? API_BASE.replace(/\/api$/, '') + u : u;
+    p.assetsUrls = Object.fromEntries(Object.entries(v.assetsUrls || {}).map(([k, u]) => [k, abs(u)]));
+    p.unlocked = !!v.unlocked;
+    p.watermarked = !v.unlocked;
+    p.price = v.price;
+    p.attempts = v.attempts || null;
+    p.regen = v.regen || null;
+    p.kitState = v.kit ? v.kit.state : 'none';
+    p.kitMissing = (v.kit && v.kit.missing) || [];
+    p.kitQuota = !!(v.kit && v.kit.quota);
+    p.kit = (v.kit && v.kit.files) || null;
+    p.identity = v.identity || null;
+
+    const entry = appState.projectsDb.find(x => x.id === p.id);
+    if (entry) {   // Profissionais: guarda o projeto para reabrir depois pela lista
+        const { photos, references, ...rest } = p;
+        entry.snapshot = { ...rest, dateObj: rest.dateObj ? new Date(rest.dateObj).toISOString() : null };
+    }
+    try { localStorage.setItem('meraki_last_project', v.projectId); } catch (_) { /* ignora */ }
+    saveStateToStorage();
+    populateResultScreen();
+    if (v.identity) applyIdentity(v.identity);
+}
+
+// Botões, avisos e contadores da tela de resultado conforme o estado: prévia, pago ou kit pronto
+function renderResultState() {
+    const p = appState.currentProject || {};
+    const unlocked = !!p.unlocked;
+    const kitReady = unlocked && (p.kitState === 'ready' || p.kitState === 'partial');
+    const show = (id, on) => { const el = document.getElementById(id); if (el) el.style.display = on ? '' : 'none'; };
+    show('actions-locked', !unlocked);
+    show('actions-paid', unlocked && !kitReady);
+    show('actions-ready', kitReady);
+    const tabs = document.querySelector('.result-tabs');
+    if (tabs) tabs.style.display = kitReady ? '' : 'none';
+
+    const banner = document.getElementById('watermark-notice');
+    if (banner) {
+        banner.style.display = unlocked ? 'none' : 'flex';
+        const h4 = banner.querySelector('h4'), pp = banner.querySelector('p');
+        if (h4) h4.textContent = 'Prévia do seu convite e lembrete (com marca d\'água)';
+        if (pp) pp.textContent = 'Gostou? Libere o kit completo: mascote com o rosto da criança, elementos do tema, fundo, papel digital, logotipo, brasão, lembrancinha e paleta de cores, tudo sem marca d\'água e pronto para baixar.';
+    }
+
+    const badge = document.getElementById('client-generations-badge');
+    if (badge) {
+        if (!unlocked && p.attempts) badge.textContent = `Prévia ${p.attempts.used} de ${p.attempts.allowed}`;
+        else badge.textContent = unlocked ? '✅ Kit liberado' : '';
+    }
+    const plural = (n) => `${n} ${n === 1 ? 'restante' : 'restantes'}`;
+    const regenCount = document.getElementById('btn-regen-count');
+    if (regenCount && p.attempts) regenCount.textContent = plural(p.attempts.left);
+    const paidCount = document.getElementById('btn-paid-regen-count');
+    if (paidCount && p.regen) paidCount.textContent = plural(p.regen.left);
+    show('btn-paid-regen', !!(p.regen && p.regen.left > 0));
+
+    const price = document.getElementById('checkout-val-price');
+    if (price && p.price) price.textContent = `R$ ${Number(p.price).toFixed(2).replace('.', ',')}`;
+}
+
+// ---------------- Pagamento ----------------
+function goToCheckout() {
+    if (!(appState.currentProject || {}).projectId) { alert('Gere uma prévia primeiro.'); return; }
+    stopPayPolling();
+    const w = document.getElementById('pay-waiting'); if (w) w.style.display = 'none';
+    const d = document.getElementById('btn-pay-dev'); if (d) d.style.display = 'none';
+    const b = document.getElementById('btn-pay-mp'); if (b) b.style.display = '';
+    showView('checkout');
+}
+
+async function startPayment() {
+    const p = appState.currentProject || {};
+    if (!p.projectId) return;
+    const btn = document.getElementById('btn-pay-mp');
+    btn.disabled = true;
+    try {
+        const res = await fetch(`${API_BASE}/payments/${p.projectId}/checkout`, { method: 'POST', headers: authHeaders() });
+        const d = await res.json().catch(() => ({}));
+        if (!res.ok) throw new Error(d.error || 'Não foi possível iniciar o pagamento.');
+        if (d.paid) { await onPaid(); return; }
+        if (d.dev) {                                    // servidor em modo de teste, sem Mercado Pago
+            document.getElementById('btn-pay-dev').style.display = '';
+            btn.style.display = 'none';
+            return;
+        }
+        window.location.href = d.url;                  // paga no Mercado Pago e volta para cá (?pago=<id>)
+    } catch (e) {
+        alert(e.message);
+    } finally {
+        btn.disabled = false;
     }
 }
 
-function copyPixKey() {
-    const keyInput = document.getElementById('pixKeyInput');
-    keyInput.select();
-    document.execCommand('copy');
-    alert("Chave Pix Copiada com sucesso!");
+function reopenPayment() { startPayment(); }
+
+function stopPayPolling() { if (payPollTimer) { clearInterval(payPollTimer); payPollTimer = null; } }
+
+async function checkPayment() {
+    const p = appState.currentProject || {};
+    if (!p.projectId) return false;
+    try {
+        const res = await fetch(`${API_BASE}/payments/${p.projectId}/status`, { headers: authHeaders() });
+        const d = await res.json();
+        if (d.paid) { stopPayPolling(); await onPaid(); return true; }
+    } catch (_) { /* tenta de novo no próximo ciclo */ }
+    return false;
 }
 
-function simulatePaymentApproval() {
-    appState.currentProject.watermarked = false;
-    updateWatermarkVisibility();
-    renderDownloads();
-    showView('download');
-    alert("Pagamento aprovado! Seu kit em alta resolução está liberado.");
+function startPayPolling() {
+    stopPayPolling();
+    const w = document.getElementById('pay-waiting'); if (w) w.style.display = '';
+    payPollTimer = setInterval(checkPayment, 4000);
+    checkPayment();
 }
+
+async function checkPaymentNow() {
+    if (!(await checkPayment())) alert('Ainda não recebemos a confirmação. O Pix leva alguns segundos; se já pagou, aguarde um pouco e tente de novo.');
+}
+
+async function devApprovePayment() {
+    const p = appState.currentProject || {};
+    try {
+        const res = await fetch(`${API_BASE}/payments/${p.projectId}/dev-approve`, { method: 'POST', headers: authHeaders() });
+        if (!res.ok) throw new Error('Simulação indisponível neste servidor.');
+        await onPaid();
+    } catch (e) { alert(e.message); }
+}
+
+// Pagamento confirmado pelo servidor: recarrega o projeto (agora liberado) e mostra as opções
+async function onPaid() {
+    const p = appState.currentProject || {};
+    const res = await fetch(`${API_BASE}/generate/project/${p.projectId}`, { headers: authHeaders() });
+    if (!res.ok) { alert('Pagamento aprovado! Recarregue a página para ver o seu kit.'); return; }
+    applyProjectView(await res.json());
+    showView('result');
+    alert('Pagamento aprovado! Confira o seu convite e, quando quiser, gere o kit completo.');
+}
+
+// ---------------- Barra de progresso (tela "criando") ----------------
+function showBusy(title, text, seconds) {
+    const t = document.querySelector('#view-generating .magic-title'); if (t) t.textContent = title;
+    const s = document.getElementById('generating-status-text'); if (s) s.textContent = text;
+    const bar = document.getElementById('generator-progress-bar'); if (bar) bar.style.width = '2%';
+    showView('generating');
+    let prog = 2;
+    if (busyTimer) clearInterval(busyTimer);
+    busyTimer = setInterval(() => {
+        prog = Math.min(92, prog + 90 / seconds);
+        if (bar) bar.style.width = `${prog}%`;
+    }, 1000);
+}
+function stopBusy() {
+    if (busyTimer) { clearInterval(busyTimer); busyTimer = null; }
+    const bar = document.getElementById('generator-progress-bar'); if (bar) bar.style.width = '100%';
+    const t = document.querySelector('#view-generating .magic-title'); if (t) t.textContent = 'Mia está criando a mágica! ✨';
+}
+
+// ---------------- Kit completo (depois de pago) ----------------
+async function startKitGeneration(items) {
+    const p = appState.currentProject || {};
+    if (!p.projectId) return;
+    try {
+        const res = await fetch(`${API_BASE}/generate/kit/${p.projectId}`, {
+            method: 'POST', headers: { 'Content-Type': 'application/json', ...authHeaders() },
+            body: JSON.stringify({ items: Array.isArray(items) ? items : [] }),
+        });
+        const d = await res.json().catch(() => ({}));
+        if (!res.ok) throw new Error(d.error || 'Não foi possível iniciar a geração do kit.');
+        showBusy('Mia está montando o seu kit! ✨', 'Criando o mascote, os elementos, o logotipo e o restante do kit... isso leva alguns minutos. Pode deixar esta página aberta.', 240);
+        pollKit();
+    } catch (e) {
+        alert(e.message);
+    }
+}
+
+function pollKit() {
+    if (kitPollTimer) clearInterval(kitPollTimer);
+    const tick = async () => {
+        const p = appState.currentProject || {};
+        try {
+            const res = await fetch(`${API_BASE}/generate/kit/${p.projectId}/status`, { headers: authHeaders() });
+            if (!res.ok) return;
+            const v = await res.json();
+            if (v.kit && v.kit.state === 'generating') return;
+            clearInterval(kitPollTimer); kitPollTimer = null;
+            stopBusy();
+            applyProjectView(v);
+            showView('result');
+            const st = v.kit && v.kit.state;
+            if (st === 'failed') alert('Não foi possível criar o kit agora. Nada foi perdido: toque em "Tentar de novo" para gerar outra vez.');
+            else if (st === 'partial') alert('Quase tudo ficou pronto! Alguns itens não saíram; você pode gerar só os que faltam.');
+        } catch (_) { /* tenta de novo */ }
+    };
+    kitPollTimer = setInterval(tick, 5000);
+}
+
+// Depois de pago: nova versão do convite e do lembrete (limpos), antes de gerar o resto do kit
+async function regeneratePaid() {
+    const p = appState.currentProject || {};
+    if (!p.projectId) return;
+    if (p.regen && p.regen.left <= 0) { alert('Você já usou suas novas versões.'); return; }
+    if (!confirm('Criar outra versão do convite e do lembrete? Esta tentativa será descontada.')) return;
+    showBusy('Mia está criando outra versão! ✨', 'Desenhando um novo convite e um novo lembrete...', 120);
+    try {
+        const res = await fetch(`${API_BASE}/generate/regenerate/${p.projectId}`, { method: 'POST', headers: authHeaders(), signal: AbortSignal.timeout(600000) });
+        const d = await res.json().catch(() => ({}));
+        stopBusy();
+        if (!res.ok) throw new Error(d.error || 'Não foi possível criar outra versão agora.');
+        applyProjectView(d);
+        showView('result');
+    } catch (e) {
+        stopBusy();
+        showView('result');
+        alert(e.message);
+    }
+}
+
+// Voltando do pagamento (?pago=<id>) ou retomando um kit já pago
+async function resumeFromUrl() {
+    const params = new URLSearchParams(location.search);
+    const fromUrl = params.get('pago');
+    let pid = fromUrl;
+    if (!pid) { try { pid = localStorage.getItem('meraki_last_project'); } catch (_) { /* ignora */ } }
+    if (!pid) return;
+    try {
+        const res = await fetch(`${API_BASE}/generate/project/${pid}`, { headers: authHeaders() });
+        if (!res.ok) { try { localStorage.removeItem('meraki_last_project'); } catch (_) { /* ignora */ } return; }
+        const v = await res.json();
+        if (!fromUrl) {                                   // sem retorno do pagamento: só retoma kit que já foi pago
+            if (!v.unlocked || !confirm(`Você tem um kit já liberado (${(v.project && v.project.name) || 'sua festa'}). Quer continuar com ele?`)) return;
+        }
+        appState.currentProject = { id: Date.now() };
+        applyProjectView(v);
+        if (fromUrl) history.replaceState(null, '', location.pathname);
+        if (v.unlocked) {
+            if (v.kit && v.kit.state === 'generating') {
+                showBusy('Mia está montando o seu kit! ✨', 'Seu kit está sendo criado. Pode deixar esta página aberta.', 240);
+                pollKit();
+            } else {
+                showView('result');
+            }
+        } else {
+            showView('checkout');
+            startPayPolling();
+        }
+    } catch (e) { console.warn('[App] Não foi possível retomar o projeto:', e.message); }
+}
+
+
 
 // 12. DOWNLOADS: links reais para os arquivos do projeto gerado (o servidor confere se o kit foi liberado)
 function renderDownloads() {
@@ -1160,13 +1335,13 @@ async function logoutPro() {
 
 function simulateProSubscription() {
     alert("Simulando assinatura do Plano Conviteira Pró pela Kiwify...");
-    
+
     appState.currentUser.type = 'pro';
     appState.currentUser.name = 'Ana';
-    
+
     saveStateToStorage();
     updateUIFromState();
-    
+
     showView('pro-dashboard');
 }
 
@@ -1176,15 +1351,15 @@ function saveAdminSettings() {
     const freeInput = document.getElementById('admin-client-free').value;
     const dailyInput = document.getElementById('admin-pro-daily').value;
     const monthlyInput = document.getElementById('admin-pro-monthly').value;
-    
+
     appState.config.kitPrice = parseFloat(priceInput);
     appState.config.freeLimits = parseInt(freeInput);
     appState.config.proDailyLimit = parseInt(dailyInput);
     appState.config.proMonthlyLimit = parseInt(monthlyInput);
-    
+
     saveStateToStorage();
     updateUIFromState();
-    
+
     alert("Configurações Administrativas Salvas com Sucesso!");
 }
 
@@ -1222,11 +1397,11 @@ function resetSimulator() {
             currentProject: {},
             projectsDb: []
         };
-        
+
         updateAdminInputFields();
         updateUIFromState();
         showView('home');
-        
+
         alert("Simulador Resetado!");
     }
 }
@@ -1242,9 +1417,6 @@ function updateAdminInputFields() {
 }
 
 function updateUIFromState() {
-    const checkoutPrice = document.getElementById('checkout-val-price');
-    if (checkoutPrice) checkoutPrice.textContent = `R$ ${appState.config.kitPrice.toFixed(2)}`;
-    
     const badge = document.getElementById('user-badge');
     if (badge) {
         if (appState.currentUser.type === 'pro') {
@@ -1253,17 +1425,7 @@ function updateUIFromState() {
             badge.textContent = 'Cliente';
         }
     }
-    
-    const regenCount = document.getElementById('btn-regen-count');
-    if (regenCount) {
-        const remaining = Math.max(0, appState.config.freeLimits - appState.currentUser.clientGenerationsCount);
-        regenCount.textContent = appState.config.infiniteLimit ? 'Ilimitado' : `${remaining} restantes`;
-    }
-    const clientGenerationsBadge = document.getElementById('client-generations-badge');
-    if (clientGenerationsBadge) {
-        clientGenerationsBadge.textContent = `Tentativa ${appState.currentUser.clientGenerationsCount} de ${appState.config.freeLimits}`;
-    }
-    
+
     const limitWarning = document.getElementById('client-limit-warning');
     if (limitWarning) {
         limitWarning.style.display = appState.currentUser.type === 'pro' ? 'none' : 'block';
@@ -1285,13 +1447,13 @@ function updateUIFromState() {
 function renderProProjectsList() {
     const container = document.getElementById('pro-projects-list');
     if (!container) return;
-    
+
     container.innerHTML = '';
-    
+
     appState.projectsDb.forEach(p => {
         const typeLabels = { infantil: 'Infantil', debutante: '15 anos', adulto: 'Adulto' };
         const statusClass = p.status === 'Finalizado' ? 'finalizado' : 'criando';
-        
+
         const card = document.createElement('div');
         card.className = 'pro-project-item-card';
         card.innerHTML = `
@@ -1301,12 +1463,12 @@ function renderProProjectsList() {
             </div>
             <span class="pro-proj-status ${statusClass}">${p.status === 'Finalizado' ? '✓ Finalizado' : '⌛ Em criação'}</span>
         `;
-        
+
         card.style.cursor = 'pointer';
         card.onclick = () => {
             loadProjectToResult(p.id);
         };
-        
+
         container.appendChild(card);
     });
 }
@@ -1314,12 +1476,12 @@ function renderProProjectsList() {
 function renderAdminProjectsTable() {
     const container = document.getElementById('admin-projects-rows');
     if (!container) return;
-    
+
     container.innerHTML = '';
-    
+
     appState.projectsDb.forEach(p => {
         const typeLabels = { infantil: 'Infantil', debutante: '15 anos', adulto: 'Adulto' };
-        
+
         const tr = document.createElement('tr');
         tr.innerHTML = `
             <td><strong>${p.name}</strong></td>

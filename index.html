@@ -408,12 +408,18 @@
 
 
                             <div class="form-field-group">
+                                <label for="partyEmail">Seu e-mail</label>
+                                <input type="email" id="partyEmail" placeholder="voce@exemplo.com" autocomplete="email" required>
+                                <small style="color:var(--gray-muted); font-size:0.72rem;">Usamos para controlar suas prévias grátis e para você recuperar o seu kit depois.</small>
+                            </div>
+
+                            <div class="form-field-group">
                                 <label for="partyNotes">Quer pedir alguma coisa específica? (opcional)</label>
                                 <textarea id="partyNotes" rows="3" placeholder="Escreva aqui o que você gostaria de ver na arte"></textarea>
                             </div>
 
                             <div class="generation-warning-box margin-top-sm" id="client-limit-warning" style="font-size:0.75rem; color:var(--gray-muted); margin-bottom: 12px;">
-                                ⚠️ Limite: <strong>1 Geração + 1 Regeneração Grátis</strong> para testar.
+                                ⚠️ Você pode criar <strong>2 prévias grátis</strong> (convite e lembrete com marca d'água). O kit completo, sem marca d'água, é liberado depois do pagamento.
                             </div>
 
                             <div class="form-navigation">
@@ -444,7 +450,7 @@
                         
                         <div class="generating-tips">
                             <div class="gen-tip-item active">💡 Nossos convites virtuais utilizam fontes reais vetorizadas em cima do fundo da IA para garantir a nitidez na hora de imprimir ou enviar.</div>
-                            <div class="gen-tip-item">💡 Você visualizará todas as 12 peças do kit antes de comprar.</div>
+                            <div class="gen-tip-item">💡 Você vê o convite e o lembrete antes de pagar. Depois do pagamento, criamos o kit completo com o convite que você escolher.</div>
                         </div>
                     </div>
                 </div>
@@ -676,12 +682,30 @@
 
                     <!-- Bottom Action Buttons -->
                     <div class="result-actions-footer">
-                        <button class="btn btn-primary btn-block animate-pulse" onclick="showView('checkout')">
-                            💖 AMEI, QUERO MEU KIT COMPLETO
-                        </button>
-                        <button class="btn btn-secondary btn-block" onclick="handleRegenerationClick()">
-                            🔄 GERAR OUTRA OPÇÃO (<span id="btn-regen-count">1 restante</span>)
-                        </button>
+                        <!-- Antes de pagar -->
+                        <div id="actions-locked">
+                            <button class="btn btn-primary btn-block animate-pulse" onclick="goToCheckout()">
+                                💖 AMEI, QUERO MEU KIT COMPLETO
+                            </button>
+                            <button class="btn btn-secondary btn-block" id="btn-regen" onclick="handleRegenerationClick()">
+                                🔄 GERAR OUTRA OPÇÃO (<span id="btn-regen-count">2 restantes</span>)
+                            </button>
+                        </div>
+                        <!-- Pago, kit ainda não gerado -->
+                        <div id="actions-paid" style="display:none;">
+                            <button class="btn btn-primary btn-block animate-pulse" onclick="startKitGeneration()">
+                                ✨ GERAR MEU KIT COMPLETO COM ESTE CONVITE
+                            </button>
+                            <button class="btn btn-secondary btn-block" id="btn-paid-regen" onclick="regeneratePaid()">
+                                🔄 CRIAR OUTRA VERSÃO DO CONVITE (<span id="btn-paid-regen-count">2 restantes</span>)
+                            </button>
+                        </div>
+                        <!-- Kit pronto -->
+                        <div id="actions-ready" style="display:none;">
+                            <button class="btn btn-primary btn-block animate-pulse" onclick="showView('download')">
+                                ⬇️ BAIXAR MEU KIT
+                            </button>
+                        </div>
                     </div>
 
                 </div>
@@ -709,74 +733,23 @@
                     </div>
 
                     <div class="payment-methods-box">
-                        <h3>Forma de pagamento:</h3>
-                        
-                        <div class="payment-tabs">
-                            <button class="pay-tab-btn active" id="btn-pay-pix" onclick="switchPaymentMethod('pix')">⚡ PIX</button>
-                            <button class="pay-tab-btn" id="btn-pay-cc" onclick="switchPaymentMethod('cc')">💳 Cartão</button>
+                        <h3>Pagamento seguro</h3>
+                        <p style="font-size:0.85rem; color:var(--gray-muted); margin:6px 0 14px;">
+                            Você paga pelo <strong>Mercado Pago</strong> com <strong>Pix</strong> ou <strong>cartão</strong>. Assim que o pagamento for aprovado, o kit é liberado aqui, automaticamente.
+                        </p>
+                        <ul style="font-size:0.82rem; color:var(--gray-muted); margin:0 0 14px 18px; line-height:1.55;">
+                            <li>Convite e lembrete sem marca d'água</li>
+                            <li>Mascote com o rosto da criança, elementos do tema e papel digital</li>
+                            <li>Logotipo, brasão, lembrancinha e paleta de cores</li>
+                            <li>Downloads em alta resolução (PNG e PDF) e +2 novas versões do convite</li>
+                        </ul>
+                        <button class="btn btn-primary btn-block" id="btn-pay-mp" onclick="startPayment()">💳 PAGAR COM MERCADO PAGO</button>
+                        <div id="pay-waiting" style="display:none; text-align:center; margin-top:14px; font-size:0.85rem; color:var(--gray-muted);">
+                            ⏳ Aguardando a confirmação do pagamento... Quando você pagar, esta tela libera sozinha.
+                            <button class="btn btn-secondary btn-block" style="margin-top:10px;" onclick="checkPaymentNow()">Já paguei, verificar agora</button>
+                            <button class="btn btn-secondary btn-block outline" style="margin-top:6px;" onclick="reopenPayment()">Abrir o pagamento de novo</button>
                         </div>
-
-                        <!-- PIX -->
-                        <div class="payment-method-content active" id="pay-method-pix">
-                            <div class="pix-simulation-details">
-                                <div class="qr-code-placeholder">
-                                    <svg viewBox="0 0 100 100" class="qr-svg">
-                                        <rect width="100" height="100" fill="#FFF"/>
-                                        <rect x="5" y="5" width="25" height="25" fill="#1C1C1C" stroke="#FFF" stroke-width="2"/>
-                                        <rect x="10" y="10" width="15" height="15" fill="#FFF"/>
-                                        <rect x="70" y="5" width="25" height="25" fill="#1C1C1C" stroke="#FFF" stroke-width="2"/>
-                                        <rect x="75" y="10" width="15" height="15" fill="#FFF"/>
-                                        <rect x="5" y="70" width="25" height="25" fill="#1C1C1C" stroke="#FFF" stroke-width="2"/>
-                                        <rect x="10" y="75" width="15" height="15" fill="#FFF"/>
-                                        <rect x="40" y="10" width="8" height="8" fill="#1C1C1C"/>
-                                        <rect x="50" y="20" width="12" height="6" fill="#1C1C1C"/>
-                                        <rect x="40" y="40" width="15" height="15" fill="#1C1C1C"/>
-                                        <rect x="65" y="50" width="8" height="18" fill="#1C1C1C"/>
-                                        <rect x="70" y="70" width="10" height="10" fill="#1C1C1C"/>
-                                        <rect x="42" y="42" width="16" height="16" fill="#69D7D1"/>
-                                    </svg>
-                                </div>
-                                <p class="pix-instructions">Clique no botão de aprovação abaixo para simular o recebimento do PIX:</p>
-                                
-                                <div class="pix-key-wrapper">
-                                    <input type="text" id="pixKeyInput" value="00020101021226850014br.gov.bcb.pix2563meraki..." readonly>
-                                    <button class="btn-copy" onclick="copyPixKey()">Copiar</button>
-                                </div>
-                            </div>
-                            
-                            <button class="btn btn-primary btn-block margin-top-md" onclick="simulatePaymentApproval()">
-                                🟢 APROVAR PAGAMENTO PIX
-                            </button>
-                        </div>
-
-                        <!-- Credit Card -->
-                        <div class="payment-method-content" id="pay-method-cc">
-                            <div class="credit-card-form">
-                                <div class="form-field-group">
-                                    <label>Número do Cartão</label>
-                                    <input type="text" placeholder="0000 0000 0000 0000">
-                                </div>
-                                <div class="form-input-row-2">
-                                    <div class="form-field-group">
-                                        <label>Validade</label>
-                                        <input type="text" placeholder="MM/AA">
-                                    </div>
-                                    <div class="form-field-group">
-                                        <label>CVV</label>
-                                        <input type="text" placeholder="123">
-                                    </div>
-                                </div>
-                                <div class="form-field-group">
-                                    <label>Nome impresso</label>
-                                    <input type="text" placeholder="Ex: CAROLINA SILVA">
-                                </div>
-                            </div>
-                            
-                            <button class="btn btn-primary btn-block margin-top-md" onclick="simulatePaymentApproval()">
-                                💳 CONFIRMAR PAGAMENTO SIMULADO
-                            </button>
-                        </div>
-
+                        <button class="btn btn-secondary btn-block" id="btn-pay-dev" style="display:none; margin-top:10px;" onclick="devApprovePayment()">🧪 SIMULAR PAGAMENTO (somente teste)</button>
                     </div>
 
                 </div>

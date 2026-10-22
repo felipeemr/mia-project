@@ -107,4 +107,40 @@ async function ensureBucketExists() {
     }
 }
 
-module.exports = { uploadBuffer, uploadFromUrl, downloadBuffer, removeFile, ensureBucketExists, BUCKET };
+// ---------------------------------------------------------------------------
+// Bucket PRIVADO: arte limpa (sem marca d'água) e foto da criança. Nunca tem URL pública:
+// só o servidor lê, depois do pagamento.
+// ---------------------------------------------------------------------------
+const PRIVATE_BUCKET = 'meraki-private';
+let privateReady = false;
+
+async function ensurePrivateBucket() {
+    if (privateReady) return;
+    const { data: buckets } = await supabaseAdmin.storage.listBuckets();
+    if (!buckets?.some(b => b.name === PRIVATE_BUCKET)) {
+        const { error } = await supabaseAdmin.storage.createBucket(PRIVATE_BUCKET, { public: false });
+        if (error && !/already exists/i.test(error.message)) throw new Error('[Storage] Não foi possível criar o bucket privado: ' + error.message);
+        console.log(`[Storage] Bucket privado '${PRIVATE_BUCKET}' criado.`);
+    }
+    privateReady = true;
+}
+
+async function uploadPrivate(buffer, filePath, mimeType = 'image/png') {
+    await ensurePrivateBucket();
+    const { error } = await supabaseAdmin.storage.from(PRIVATE_BUCKET).upload(filePath, buffer, { contentType: mimeType, upsert: true });
+    if (error) throw new Error('[Storage] Upload privado falhou: ' + error.message);
+    return filePath;
+}
+
+async function downloadPrivate(filePath) {
+    await ensurePrivateBucket();
+    const { data, error } = await supabaseAdmin.storage.from(PRIVATE_BUCKET).download(filePath);
+    if (error) throw new Error('[Storage] Download privado falhou: ' + error.message);
+    return Buffer.from(await data.arrayBuffer());
+}
+
+async function removePrivate(filePath) {
+    try { await supabaseAdmin.storage.from(PRIVATE_BUCKET).remove([filePath]); } catch (_) { /* ignora */ }
+}
+
+module.exports = { uploadPrivate, downloadPrivate, removePrivate, ensurePrivateBucket, uploadBuffer, uploadFromUrl, downloadBuffer, removeFile, ensureBucketExists, BUCKET };

@@ -13,7 +13,9 @@ const axios    = require('axios');
 
 const { supabaseAdmin }                       = require('../services/supabase');
 const { renderConvite, renderLembrete, renderNativeArt, pngToPdf } = require('../services/renderer');
-const { uploadBuffer, downloadBuffer }        = require('../services/storage');
+const { downloadPrivate }                     = require('../services/storage');
+const orders                                  = require('../services/orders');
+const { makeCleanView }                       = require('../services/preview');
 const { requireAuth, optionalAuth }           = require('../middleware/auth');
 
 const ASSETS_PATH = path.join(__dirname, '..', '..', 'assets');
@@ -27,75 +29,64 @@ const DEFAULT_BG  = {
 // Helpers
 // ---------------------------------------------------------------------------
 
-/** Verifica se o projeto foi pago ou se é um acesso de bypass */
-async function isProjectUnlocked(projectId, userId, bypassPayment = false) {
-    if (bypassPayment) return true;
+/** Libera só com pagamento conferido (ou dono profissional). Não existe mais liberação por ambiente de desenvolvimento. */
+const isProjectUnlocked = (project, userId) => orders.isUnlocked(project, userId);
 
-    const { data } = await supabaseAdmin
-        .from('projects')
-        .select('status, user_id, watermarked')
-        .eq('id', projectId)
-        .single();
+async function loadProject(id) { return orders.getProject(id); }
 
-    if (!data) return false;
-    if (data.status === 'paid' || data.status === 'delivered') return true;
-    if (data.user_id && userId && data.user_id === userId) {
-        // Conviteira pro — acesso direto
-        const { data: profile } = await supabaseAdmin
-            .from('profiles')
-            .select('user_type')
-            .eq('id', userId)
-            .single();
-        return profile?.user_type === 'pro';
-    }
-    return false;
+/** Convite aprovado (arte limpa) guardado no bucket PRIVADO */
+async function getBgBuffer(project) {
+    const priv = project.assets_urls?.priv_convite;
+    if (priv) return downloadPrivate(priv);
+    throw new Error('Convite não encontrado.');
 }
 
-/** Lembrete gerado pela IA (arte própria no estilo do convite), se existir */
+/** Lembrete (arte limpa) guardado no bucket PRIVADO; null se não houver */
 async function getGeneratedLembrete(project) {
-    const url = project.assets_urls?.lembrete;
-    if (!url) return null;
-    try {
-        const resp = await axios.get(url, { responseType: 'arraybuffer', timeout: 20000 });
-        return Buffer.from(resp.data);
-    } catch (e) {
-        console.warn('[Downloads] Falha ao baixar o lembrete gerado:', e.message);
+    const priv = project.assets_urls?.priv_lembrete;
+    if (!priv) return null;
+    try { return await downloadPrivate(priv); }
+    catch (e) { console.warn('[Downloads] Falha ao ler o lembrete:', e.message); return null; }
+}
+
+/** Obtém o projeto e exige o pagamento; responde 404/402 e devolve null se não puder seguir */
+async function requireUnlocked(req, res) {
+    const project = await loadProject(req.params.projectId);
+    if (!project) { res.status(404).json({ error: 'Projeto não encontrado.' }); return null; }
+    if (!(await isProjectUnlocked(project, req.user?.id))) {
+        res.status(402).json({ error: 'Kit não liberado. Realize o pagamento para acessar os arquivos.' });
         return null;
     }
+    return project;
 }
 
-/** Carrega buffer de fundo: da URL gerada por IA ou do asset local padrão */
-async function getBgBuffer(project) {
-    const aiUrl = project.assets_urls?.background;
-    if (aiUrl) {
-        try {
-            const resp = await axios.get(aiUrl, { responseType: 'arraybuffer', timeout: 15000 });
-            return Buffer.from(resp.data);
-        } catch (_) { /* fallback */ }
+// ---------------------------------------------------------------------------
+// GET /api/downloads/:projectId/view/:name.jpg — convite/lembrete limpo, tamanho de tela (só depois de pago)
+// ---------------------------------------------------------------------------
+router.get('/:projectId/view/:name.jpg', optionalAuth, async (req, res) => {
+    try {
+        const project = await requireUnlocked(req, res);
+        if (!project) return;
+        const buf = req.params.name === 'lembrete' ? await getGeneratedLembrete(project)
+                  : req.params.name === 'convite'  ? await getBgBuffer(project) : null;
+        if (!buf) return res.status(404).json({ error: 'Arquivo não encontrado.' });
+        res.set({ 'Content-Type': 'image/jpeg', 'Cache-Control': 'private, max-age=300' });
+        res.send(await makeCleanView(buf));
+    } catch (err) {
+        console.error('[Downloads/View]', err.message);
+        res.status(500).json({ error: 'Não foi possível carregar a imagem.' });
     }
-    return fs.readFileSync(DEFAULT_BG[project.type] || DEFAULT_BG.infantil);
-}
+});
 
 // ---------------------------------------------------------------------------
 // GET /api/downloads/:projectId/convite.png — Convite limpo 300 DPI
 // ---------------------------------------------------------------------------
 router.get('/:projectId/convite.png', optionalAuth, async (req, res) => {
     try {
-        const { data: project } = await supabaseAdmin
-            .from('projects')
-            .select('*')
-            .eq('id', req.params.projectId)
-            .single();
+        const project = await requireUnlocked(req, res);
+        if (!project) return;
 
-        if (!project) return res.status(404).json({ error: 'Projeto não encontrado.' });
-
-        const unlocked = await isProjectUnlocked(
-            project.id,
-            req.user?.id,
-            process.env.NODE_ENV === 'development' // bypass em dev
-        );
-
-        const withWatermark = !unlocked;
+        const withWatermark = false;
         const bgBuffer      = await getBgBuffer(project);
         const convitePng    = await renderConvite(project, bgBuffer, withWatermark);
 
@@ -116,16 +107,10 @@ router.get('/:projectId/convite.png', optionalAuth, async (req, res) => {
 // ---------------------------------------------------------------------------
 router.get('/:projectId/convite.pdf', optionalAuth, async (req, res) => {
     try {
-        const { data: project } = await supabaseAdmin
-            .from('projects')
-            .select('*')
-            .eq('id', req.params.projectId)
-            .single();
+        const project = await requireUnlocked(req, res);
+        if (!project) return;
 
-        if (!project) return res.status(404).json({ error: 'Projeto não encontrado.' });
-
-        const unlocked      = await isProjectUnlocked(project.id, req.user?.id, process.env.NODE_ENV === 'development');
-        const withWatermark = !unlocked;
+        const withWatermark = false;
         const bgBuffer      = await getBgBuffer(project);
 
         const [convitePng] = await Promise.all([
@@ -150,16 +135,10 @@ router.get('/:projectId/convite.pdf', optionalAuth, async (req, res) => {
 // ---------------------------------------------------------------------------
 router.get('/:projectId/lembrete.png', optionalAuth, async (req, res) => {
     try {
-        const { data: project } = await supabaseAdmin
-            .from('projects')
-            .select('*')
-            .eq('id', req.params.projectId)
-            .single();
+        const project = await requireUnlocked(req, res);
+        if (!project) return;
 
-        if (!project) return res.status(404).json({ error: 'Projeto não encontrado.' });
-
-        const unlocked      = await isProjectUnlocked(project.id, req.user?.id, process.env.NODE_ENV === 'development');
-        const withWatermark = !unlocked;
+        const withWatermark = false;
         const bgBuffer      = await getBgBuffer(project);
         const generated     = await getGeneratedLembrete(project);
         const lembretePng   = generated ? await renderNativeArt(generated, withWatermark) : await renderLembrete(project, bgBuffer, withWatermark);
@@ -181,20 +160,10 @@ router.get('/:projectId/lembrete.png', optionalAuth, async (req, res) => {
 // ---------------------------------------------------------------------------
 router.get('/:projectId/kit.zip', optionalAuth, async (req, res) => {
     try {
-        const { data: project } = await supabaseAdmin
-            .from('projects')
-            .select('*')
-            .eq('id', req.params.projectId)
-            .single();
+        const project = await requireUnlocked(req, res);
+        if (!project) return;
 
-        if (!project) return res.status(404).json({ error: 'Projeto não encontrado.' });
-
-        const unlocked = await isProjectUnlocked(project.id, req.user?.id, process.env.NODE_ENV === 'development');
-        if (!unlocked) {
-            return res.status(402).json({ error: 'Kit não desbloqueado. Realize o pagamento para acessar os arquivos limpos.' });
-        }
-
-        const bgBuffer = await getBgBuffer(project);
+                const bgBuffer = await getBgBuffer(project);
 
         console.log(`[Downloads/ZIP] Gerando kit para "${project.name}"...`);
 
