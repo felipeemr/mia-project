@@ -16,6 +16,7 @@ const { renderConvite, renderLembrete, renderNativeArt, pngToPdf } = require('..
 const { downloadPrivate }                     = require('../services/storage');
 const orders                                  = require('../services/orders');
 const { makeCleanView }                       = require('../services/preview');
+const { buildKitPdf }                         = require('../services/kitpdf');
 const { requireAuth, optionalAuth }           = require('../middleware/auth');
 
 const ASSETS_PATH = path.join(__dirname, '..', '..', 'assets');
@@ -152,6 +153,41 @@ router.get('/:projectId/lembrete.png', optionalAuth, async (req, res) => {
     } catch (err) {
         console.error('[Downloads/Lembrete]', err.message);
         res.status(500).json({ error: err.message });
+    }
+});
+
+// ---------------------------------------------------------------------------
+// GET /api/downloads/:projectId/kit.pdf — Kit completo em um único PDF (uma peça por página)
+// ---------------------------------------------------------------------------
+router.get('/:projectId/kit.pdf', optionalAuth, async (req, res) => {
+    try {
+        const project = await requireUnlocked(req, res);
+        if (!project) return;
+        const u = project.assets_urls || {};
+        const get = async (url) => {
+            if (!url) return null;
+            try { return Buffer.from((await axios.get(String(url).split('?')[0], { responseType: 'arraybuffer', timeout: 30000 })).data); }
+            catch (e) { console.warn('[Downloads/PDF] Falha ao baixar um item:', e.message); return null; }
+        };
+        const k = u.kit_files || {};
+        const [convite, lembrete, mascote, elementos, fundo, lembrancinha, papel, logo, brasao, principais, complementares] = await Promise.all([
+            getBgBuffer(project), getGeneratedLembrete(project),
+            get(u.mascote), get(u.elementos), get(u.fundo), get(u.lembrancinha), get(u.papel), get(u.logo), get(u.brasao),
+            Promise.all((k.principais || []).map(get)), Promise.all((k.complementares || []).map(get)),
+        ]);
+        console.log(`[Downloads/PDF] Montando o PDF do kit de "${project.name}"...`);
+        const pdf = await buildKitPdf({
+            project, palette: u.identity?.palette || [],
+            images: { convite, lembrete, mascote, elementos, fundo, lembrancinha, papel, logo, brasao },
+            principais: principais.filter(Boolean), complementares: complementares.filter(Boolean),
+        });
+        const fname = `Kit_${String(project.name).normalize('NFD').replace(/[^w-]+/g, '_')}_Meraki.pdf`;
+        res.set({ 'Content-Type': 'application/pdf', 'Content-Disposition': `${req.query.inline ? 'inline' : 'attachment'}; filename="${fname}"`, 'Cache-Control': 'no-store' });
+        res.send(pdf);
+        try { await supabaseAdmin.from('projects').update({ status: 'delivered' }).eq('id', project.id); } catch (_) { /* ignora */ }
+    } catch (err) {
+        console.error('[Downloads/PDF]', err.message);
+        if (!res.headersSent) res.status(500).json({ error: 'Não foi possível montar o PDF agora.' });
     }
 });
 

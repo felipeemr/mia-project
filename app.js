@@ -1280,7 +1280,8 @@ function renderDownloads() {
     if (p.assetsUrls && p.assetsUrls.lembretePreview) {
         html += card('⏰', 'Lembrete', 'Card de contagem regressiva no estilo do convite.', link(`${base}/lembrete.png`, 'PNG'));
     }
-    html += card('📦', 'Pacote completo (ZIP)', 'Todos os itens do seu kit em alta resolução, sem marca d\'água.', link(`${base}/kit.zip`, 'BAIXAR ZIP', 'btn-primary'));
+    html = card('📘', 'Kit completo em PDF', 'Todas as peças do seu kit em um único arquivo, uma por página, sem marca d\'água.', link(`${base}/kit.pdf`, 'BAIXAR PDF', 'btn-primary')) + html;
+    html += card('📦', 'Arquivos separados (ZIP)', 'Cada peça em PNG, com fundo transparente nos elementos, logotipo e brasão, para editar ou imprimir.', link(`${base}/kit.zip`, 'BAIXAR ZIP', 'outline'));
     list.innerHTML = html;
 
     const subtitle = document.getElementById('download-subtitle');
